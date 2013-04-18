@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="CommonSrc">
+      <UniqueIdentifier>{ba6e9e50-0655-4f12-a136-6d2a06015925}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CommonSrc\Platform">
+      <UniqueIdentifier>{16e20d8b-eff7-454c-be85-02037c399e97}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="CommonSrc\Render">
+      <UniqueIdentifier>{1b6d51ae-a405-4f3d-be93-41a50db4f328}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\CommonSrc\Platform\Platform.cpp">
+      <Filter>CommonSrc\Platform</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Platform\Platform_Win32.cpp">
+      <Filter>CommonSrc\Platform</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Renderer\Renderer.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D1x.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D10.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Renderer\Renderer_GL.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="OculusWorldDemo.cpp" />
+    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D11.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Renderer\Renderer_Stereo.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="..\CommonSrc\Renderer\ImageReader_TGA.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\CommonSrc\Platform\Platform_Win32.h">
+      <Filter>CommonSrc\Platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Platform\Platform.h">
+      <Filter>CommonSrc\Platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Platform\Platform_Default.h">
+      <Filter>CommonSrc\Platform</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Font.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Renderer.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D1x.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D10.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D11.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Renderer_GL.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="..\CommonSrc\Renderer\Renderer_Stereo.h">
+      <Filter>CommonSrc\Render</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
