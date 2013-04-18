@@ -1108,19 +1108,6 @@ void SensorDevice::onTrackerMessage(TrackerMessage* message)
     Lock::Locker scopeLock(HandlerRef.GetLock());
 
 
-    // Latency debug LED 
-    if (s.LastCommandID != OldCommandId)
-    {
-        OldCommandId = s.LastCommandID;
-        
-        if (HandlerRef.GetHandler())
-        {
-            MessageLED led(this, s.LastCommandID != 0);
-            HandlerRef.GetHandler()->OnMessage(led);
-        }
-    }
-
-
     if (SequenceValid)
     {
         unsigned timestampDelta;

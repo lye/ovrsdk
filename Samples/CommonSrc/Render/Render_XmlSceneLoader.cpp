@@ -7,9 +7,17 @@ Authors     :   Robotic Arm Software - Peter Hoff, Dan Goodman, Bryan Croteau
 
 Copyright   :   Copyright 2013 Oculus VR, Inc. All Rights reserved.
 
-Use of this software is subject to the terms of the Oculus LLC license
-agreement provided at the time of installation or download, or which
-otherwise accompanies this software in either electronic or hard copy form.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ************************************************************************************/
 
@@ -35,8 +43,7 @@ XmlHandler::~XmlHandler()
 bool XmlHandler::ReadFile(const char* fileName, OVR::Render::RenderDevice* pRender,
 	                      OVR::Render::Scene* pScene,
                           OVR::Array<Ptr<CollisionModel> >* pCollisions,
-	                      OVR::Array<Ptr<CollisionModel> >* pGroundCollisions,
-						  size_t& totalTextureMemoryUsage)
+	                      OVR::Array<Ptr<CollisionModel> >* pGroundCollisions)
 {
     if(pXmlDocument->LoadFile(fileName) != 0)
     {
@@ -63,9 +70,7 @@ bool XmlHandler::ReadFile(const char* fileName, OVR::Render::RenderDevice* pRend
 		          QueryIntAttribute("count", &textureCount);
     XMLElement* pXmlTexture = pXmlDocument->FirstChildElement("scene")->
 		                                    FirstChildElement("textures")->FirstChildElement("texture");
-	UPInt       gpuMemorySize = pRender->QueryGPUMemorySize();
 
-	totalTextureMemoryUsage = 0;
     for(int i = 0; i < textureCount; ++i)
     {
         const char* textureName = pXmlTexture->Attribute("fileName");
@@ -86,9 +91,7 @@ bool XmlHandler::ReadFile(const char* fileName, OVR::Render::RenderDevice* pRend
 		if (textureName[dotpos + 1] == 'd' || textureName[dotpos + 1] == 'D')
 		{
 			// DDS file
-			size_t textureSize = 0;
-			texture.SetPtr(*LoadTextureDDS(pRender, pFile, gpuMemorySize, textureSize));
-			totalTextureMemoryUsage += textureSize;
+			texture.SetPtr(*LoadTextureDDS(pRender, pFile));
 		}
 		else
 		{

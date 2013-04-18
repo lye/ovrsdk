@@ -154,7 +154,7 @@ class StereoConfig
 {
 public:
 
-    StereoConfig(StereoMode mode = Stereo_None,
+    StereoConfig(StereoMode mode = Stereo_LeftRight_Multipass,
                  const Viewport& fullViewport = Viewport(0,0, 1280,800));
  
 

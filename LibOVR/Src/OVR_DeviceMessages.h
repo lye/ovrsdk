@@ -50,8 +50,6 @@ enum MessageType
     Message_LatencyTestStarted          = OVR_MESSAGETYPE(LatencyTester, 2),
     Message_LatencyTestButton           = OVR_MESSAGETYPE(LatencyTester, 3),
 
-    // Emitted when LED is turned on/off.
-    Message_LED                     = OVR_MESSAGETYPE(Sensor, 1)
 };
 
 //-------------------------------------------------------------------------------------
@@ -93,17 +91,6 @@ public:
     Vector3f MagneticField;  // Magnetic field strength in Gauss.
     float    Temperature;    // Temperature reading on sensor surface, in degrees Celsius.
     float    TimeDelta;      // Time passed since last Body Frame, in seconds.
-};
-
-// Sent when latency debug LED is toggled.
-class MessageLED : public Message
-{
-public:
-    MessageLED(DeviceBase* dev, bool ledOn)
-        : Message(Message_LED, dev), LedOn(ledOn)
-    { }
-
-    bool LedOn;
 };
 
 // Sent when we receive a device status changes.

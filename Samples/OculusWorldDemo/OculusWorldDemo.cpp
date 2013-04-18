@@ -6,11 +6,19 @@ Created     :   October 4, 2012
 Authors     :   Michael Antonov, Andrew Reisse
 				Peter Hoff, Dan Goodman, Bryan Croteau
 
-Copyright   :   Copyright 2012 Oculus, Inc. All Rights reserved.
+Copyright   :   Copyright 2012 Oculus VR, Inc. All Rights reserved.
 
-Use of this software is subject to the terms of the Oculus Inc license
-agreement provided at the time of installation or download, or which
-otherwise accompanies this software in either electronic or hard copy form.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 *************************************************************************************/
 
@@ -100,11 +108,8 @@ public:
     // Called with deltaTime when relevant key is held.
     void         AdjustFov(float dt);
     void         AdjustAspect(float dt);
-    void         AdjustIPD(float dt)
-    {
-        SConfig.SetIPD(SConfig.GetIPD() + 0.0025f * dt);
-        SetAdjustMessage("EyeDistance: %6.4f", SConfig.GetIPD());
-    }
+    void         AdjustIPD(float dt);
+    void         AdjustEyeHeight(float dt);
 
     void         AdjustDistortion(float dt, int kIndex, const char* label);
     void         AdjustDistortionK0(float dt)  { AdjustDistortion(dt, 0, "K0"); }
@@ -138,7 +143,6 @@ protected:
     int                 FPS;
     int                 FrameCounter;
     double              NextFPSUpdate;
-	size_t				TotalTextureMemoryUsage;
 
     Array<Ptr<CollisionModel> > CollisionModels;
     Array<Ptr<CollisionModel> > GroundCollisionModels;
@@ -269,8 +273,6 @@ OculusWorldDemoApp::~OculusWorldDemoApp()
 
 int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
 {
-    OVR::HMDInfo hmd;
-
 
     // *** Oculus HMD & Sensor Initialization
 
@@ -292,10 +294,10 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
         // screen size and other variables needed for correct projection.
         // We pass HMD DisplayDeviceName into the renderer to select the
         // correct monitor in full-screen mode.
-        if(pHMD->GetDeviceInfo(&hmd))
+        if(pHMD->GetDeviceInfo(&HMDInfo))
         {
             //RenderParams.MonitorName = hmd.DisplayDeviceName;
-            SConfig.SetHMDInfo(hmd);
+            SConfig.SetHMDInfo(HMDInfo);
         }
     }
     else
@@ -336,10 +338,10 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
     SetAdjustMessageTimeout(10.0f);
 
 
-    if(hmd.HResolution > 0)
+    if(HMDInfo.HResolution > 0)
     {
-        Width  = hmd.HResolution;
-        Height = hmd.VResolution;
+        Width  = HMDInfo.HResolution;
+        Height = HMDInfo.VResolution;
     }
 
     if(!pPlatform->SetupWindow(Width, Height))
@@ -348,10 +350,10 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
     }
 
     String Title = "Oculus World Demo";
-    if(hmd.ProductName[0])
+    if(HMDInfo.ProductName[0])
     {
         Title += " : ";
-        Title += hmd.ProductName;
+        Title += HMDInfo.ProductName;
     }
     pPlatform->SetWindowTitle(Title);
 
@@ -399,16 +401,15 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
     SConfig.SetStereoMode(Stereo_LeftRight_Multipass);
 
     // Configure proper Distortion Fit.
-    // For 7" screen, fit to touch left side of the view, leaving a bit of invisible
-    // screen on the top (saves on rendering cost).
+    // For 7" screen, fit to touch left side of the view, leaving a bit of
+    // invisible screen on the top (saves on rendering cost).
     // For smaller screens (5.5"), fit to the top.
-    if(hmd.HScreenSize > 0.140f)  // 7"
+    if (HMDInfo.HScreenSize > 0.0f)
     {
-        SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);
-    }
-    else
-    {
-        SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+        if (HMDInfo.HScreenSize > 0.140f)  // 7"
+            SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);        
+        else        
+            SConfig.SetDistortionFitPointVP(0.0f, 1.0f);        
     }
 
     pRender->SetSceneRenderScale(SConfig.GetDistortionScale());
@@ -561,16 +562,15 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
         break;
 
     case Key_Minus:
-        Player.EyeHeight -= 0.05f;
-        Player.EyePos.y -= 0.05f;
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustEyeHeight  : 0;
+        AdjustDirection = -1;
         break;
     case Key_Equal:
-        Player.EyeHeight += 0.05f;
-        Player.EyePos.y += 0.05f;
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustEyeHeight  : 0;
+        AdjustDirection = 1;
         break;
 
     case Key_B:
-    {
         if(down)
         {
             if(SConfig.GetDistortionScale() == 1.0f)
@@ -579,20 +579,18 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
                 {
                     SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);
                 }
+                else
+                {
+                 SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+                }
             }
             else
             {
-                SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+                // No fitting; scale == 1.0.
+                SConfig.SetDistortionFitPointVP(0, 0);
             }
         }
-        else
-        {
-            // No fitting; scale == 1.0.
-            SConfig.SetDistortionFitPointVP(0, 0);
-        }
-    }
-    break;
-
+        break;
 
     // Support toggling background color doe distortion so that we can see
     // effect on the periphery.
@@ -994,13 +992,13 @@ void OculusWorldDemoApp::OnIdle()
 }
 
 static const char* HelpText =
-    "F1\t100 NoStereo   \t450 Ins/Del \t650 ViewOffset\n"
-    "F2\t100 Stereo     \t450 [ ]     \t650 FOV\n"
-    "F3\t100 StereoHMD  \t450 H-Y J-U \t650 Distortion 1,3\n"
-    "F4\t100 MonoHMD    \t450 K-I L-O \t650 Distortion 5,7\n"
-    "F8\t100 MSAA       \t450 Shift   \t650 Adjust Faster\n"
-    "F9\t100 FullScreen \t450 F11     \t650 Fast FullScreen\n"
-	"- =\t100 Adjust Eye Pos\n"
+    "F1\t100 NoStereo   \t420 Ins/Del \t630 ViewOffset\n"
+    "F2\t100 Stereo     \t420 [ ]     \t630 FOV\n"
+    "F3\t100 StereoHMD  \t420 H-Y J-U \t630 Distortion 1,3\n"
+    "F4\t100 MonoHMD    \t420 K-I L-O \t630 Distortion 5,7\n"
+    "F8\t100 MSAA       \t420 Shift   \t630 Adjust Faster\n"
+    "F9\t100 FullScreen \t420 F11     \t630 Fast FullScreen\n"
+	"- +\t100 Adjust EyeHeight\n"
     "R \t100 Reset SensorFusion"    
     ;
 
@@ -1085,7 +1083,7 @@ void OculusWorldDemoApp::Render(const StereoEyeParams& stereo)
     case Text_Orientation:
     {
         char buf[256];
-        size_t texMemInMB = TotalTextureMemoryUsage / 1058576;
+        size_t texMemInMB = pRender->GetTotalTextureMemoryUsage() / 1058576;
         OVR_sprintf(buf, sizeof(buf),
                     " Yaw:%4.0f  Pitch:%4.0f  Roll:%4.0f \n"
                     " FPS: %d  Frame: %d \n Pos: %3.2f, %3.2f, %3.2f \n"
@@ -1099,7 +1097,7 @@ void OculusWorldDemoApp::Render(const StereoEyeParams& stereo)
     case Text_Config:
     {
         char   textBuff[2048];
-
+         
         OVR_sprintf(textBuff, sizeof(textBuff),
                     "Fov\t300 %9.4f\n"
                     "EyeDistance\t300 %9.4f\n"
@@ -1178,12 +1176,28 @@ void OculusWorldDemoApp::AdjustDistortion(float dt, int kIndex, const char* labe
     SetAdjustMessage("%s: %6.4f", label, SConfig.GetDistortionK(kIndex));
 }
 
+void OculusWorldDemoApp::AdjustIPD(float dt)
+{
+    SConfig.SetIPD(SConfig.GetIPD() + 0.0025f * dt);
+    SetAdjustMessage("EyeDistance: %6.4f", SConfig.GetIPD());
+}
+
+void OculusWorldDemoApp::AdjustEyeHeight(float dt)
+{
+    float dist = 0.5f * dt;
+
+    Player.EyeHeight += dist;
+    Player.EyePos.y += dist;
+
+    SetAdjustMessage("EyeHeight: %4.2f", Player.EyeHeight);
+}
+
+
 // Loads the scene data
 void OculusWorldDemoApp::PopulateScene(const char *fileName)
 {    
     XmlHandler xmlHandler;     
-    TotalTextureMemoryUsage = 0;   
-    if(!xmlHandler.ReadFile(fileName, pRender, &MainScene, &CollisionModels, &GroundCollisionModels, TotalTextureMemoryUsage))
+    if(!xmlHandler.ReadFile(fileName, pRender, &MainScene, &CollisionModels, &GroundCollisionModels))
     {
         SetAdjustMessage("---------------------------------\nFILE LOAD FAILED\n---------------------------------");
         SetAdjustMessageTimeout(10.0f);

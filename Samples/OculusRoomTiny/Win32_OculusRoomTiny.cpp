@@ -7,9 +7,17 @@ Authors     :   Michael Antonov, Andrew Reisse
 
 Copyright   :   Copyright 2012 Oculus, Inc. All Rights reserved.
 
-Use of this software is subject to the terms of the Oculus Inc license
-agreement provided at the time of installation or download, or which
-otherwise accompanies this software in either electronic or hard copy form.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 *************************************************************************************/
 
@@ -189,10 +197,13 @@ int OculusRoomTinyApp::OnStartup(const char* args)
     // For 7" screen, fit to touch left side of the view, leaving a bit of invisible
     // screen on the top (saves on rendering cost).
     // For smaller screens (5.5"), fit to the top.
-    if (HMDInfo.HScreenSize > 0.140f) // 7"
-        SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);
-    else
-        SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+    if (HMDInfo.HScreenSize > 0.0f)
+    {
+        if (HMDInfo.HScreenSize > 0.140f) // 7"
+            SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);
+        else
+            SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+    }
 
     pRender->SetSceneRenderScale(SConfig.GetDistortionScale());
 

@@ -7,9 +7,17 @@ Authors     :   Andrew Reisse
 
 Copyright   :   Copyright 2012 Oculus VR, Inc. All Rights reserved.
 
-Use of this software is subject to the terms of the Oculus LLC license
-agreement provided at the time of installation or download, or which
-otherwise accompanies this software in either electronic or hard copy form.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ************************************************************************************/
 
@@ -671,6 +679,7 @@ protected:
     float           SceneRenderScale;
     DistortionConfig Distortion;
     Color           DistortionClearColor;
+    UPInt			TotalTextureMemoryUsage;
 
     // For lighting on platforms with uniform buffers
     Ptr<Buffer>     LightingBuffer;
@@ -747,17 +756,7 @@ public:
     virtual Buffer*  CreateBuffer() { return NULL; }
     virtual Texture* CreateTexture(int format, int width, int height, const void* data, int mipcount=1)
     { OVR_UNUSED5(format,width,height,data, mipcount); return NULL; }
-    virtual Texture* CreateTexture(unsigned int resDim,
-                                   unsigned int twidth,
-                                   unsigned int theight,
-                                   unsigned int mipCount,
-                                   unsigned int arraySize,
-                                   unsigned int format,
-                                   void *initData)
-    {
-		OVR_UNUSED7(resDim, twidth, theight, mipCount, arraySize, format, initData);
-        return NULL;
-    }
+   
     virtual bool     GetSamplePositions(Render::Texture*, Vector3f* pos) { pos[0] = Vector3f(0); return 1; }
 
     virtual ShaderSet* CreateShaderSet() { return new ShaderSetMatrixTranspose; }
@@ -825,7 +824,10 @@ public:
     virtual bool SetFullscreen(DisplayMode fullscreen) { OVR_UNUSED(fullscreen); return false; }
     virtual void SetWindowSize(int w, int h) { WindowWidth = w; WindowHeight = h; }
 
-    virtual UPInt QueryGPUMemorySize() { return 0; }
+    UPInt GetTotalTextureMemoryUsage() const
+    {
+        return TotalTextureMemoryUsage;
+    }
     
 protected:
     // Stereo & post-processing
@@ -843,7 +845,7 @@ int GetTextureSize(int format, int w, int h);
 void FilterRgba2x2(const UByte* src, int w, int h, UByte* dest);
 
 Texture* LoadTextureTga(RenderDevice* ren, File* f);
-Texture* LoadTextureDDS(RenderDevice* ren, File* f, UPInt gpuMemorySize, size_t& textureSize);
+Texture* LoadTextureDDS(RenderDevice* ren, File* f);
 
 }}
 

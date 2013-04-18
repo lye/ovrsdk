@@ -7,9 +7,17 @@ Authors     :   Andrew Reisse
 
 Copyright   :   Copyright 2012 Oculus VR, Inc. All Rights reserved.
 
-Use of this software is subject to the terms of the Oculus LLC license
-agreement provided at the time of installation or download, or which
-otherwise accompanies this software in either electronic or hard copy form.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ************************************************************************************/
 
@@ -36,24 +44,14 @@ otherwise accompanies this software in either electronic or hard copy form.
 #define _OVR_RENDERER_D3D10
 #include <d3d10.h>
 
-namespace OVR
-{
-namespace Render
-{
-namespace D3D10
-{
+namespace OVR { namespace Render { namespace D3D10 {
 
 #else // 11
 
 #define _OVR_RENDERER_D3D11
 #include <d3d11.h>
 
-namespace OVR
-{
-namespace Render
-{
-namespace D3D11
-{
+namespace OVR { namespace Render { namespace D3D11 {
 #endif
 
 class RenderDevice;
@@ -309,13 +307,12 @@ public:
 
     virtual Buffer* CreateBuffer();
     virtual Texture* CreateTexture(int format, int width, int height, const void* data, int mipcount=1);
-    virtual Texture* CreateTexture(unsigned int resDim,
-                                   unsigned int twidth,
-                                   unsigned int theight,
-                                   unsigned int mipCount,
-                                   unsigned int arraySize,
-                                   unsigned int format,
-                                   void *initData);
+    
+    static void GenerateSubresourceData(
+                    unsigned imageWidth, unsigned imageHeight, int format, unsigned imageDimUpperLimit,
+                    const void* rawBytes,
+                    D3D1x_(SUBRESOURCE_DATA)* subresData,
+                    unsigned& largestMipWidth, unsigned& largestMipHeight, unsigned& byteSize, unsigned& effectiveMipCount);
 
     Texture* GetDepthBuffer(int w, int h, int ms);
 
@@ -352,8 +349,6 @@ public:
     void SetTexture(Render::ShaderStage stage, int slot, const Texture* t);
 };
 
-}
-}
-}
+}}}
 
 #endif

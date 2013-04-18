@@ -69,21 +69,22 @@ StereoConfig::StereoConfig(StereoMode mode, const Viewport& vp)
       OrthoPixelOffset(0)
 {
     // And default distortion for it.
-    Distortion.SetCoefficients(1.0f, 0.18f, 0.115f);
+    Distortion.SetCoefficients(1.0f, 0.22f, 0.24f);
     Distortion.Scale = 1.0f; // Will be computed later.
 
-    // Fit top of the image.
-    DistortionFitX = 0.0f;
-    DistortionFitY = 1.0f;
+    // Fit left of the image.
+    DistortionFitX = -1.0f;
+    DistortionFitY = 0.0f;
 
     // Initialize "fake" default HMD values for testing without HMD plugged in.
+    // These default values match those returned by the HMD.
     HMD.HResolution            = 1280;
     HMD.VResolution            = 800;
-    HMD.HScreenSize            = InterpupillaryDistance * 2;
+    HMD.HScreenSize            = 0.14976f;
     HMD.VScreenSize            = HMD.HScreenSize / (1280.0f / 800.0f);
     HMD.InterpupillaryDistance = InterpupillaryDistance;
     HMD.LensSeparationDistance = 0.064f;
-    HMD.EyeToScreenDistance    = 0.047f;
+    HMD.EyeToScreenDistance    = 0.041f;
     HMD.DistortionK[0]         = Distortion.K[0];
     HMD.DistortionK[1]         = Distortion.K[1];
     HMD.DistortionK[2]         = Distortion.K[2];

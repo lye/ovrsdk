@@ -7,9 +7,17 @@ Authors     :   Andrew Reisse
 
 Copyright   :   Copyright 2012 Oculus VR, Inc. All Rights reserved.
 
-Use of this software is subject to the terms of the Oculus LLC license
-agreement provided at the time of installation or download, or which
-otherwise accompanies this software in either electronic or hard copy form.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 
 ************************************************************************************/
 
@@ -196,6 +204,9 @@ static const char* AlphaTexturePixelShaderSrc =
     "   return ov.Color * float4(1,1,1,Texture.Sample(Linear, ov.TexCoord).r);\n"
     "}\n";
 
+
+// ***** PostProcess Shader
+
 static const char* PostProcessVertexShaderSrc =
     "float4x4 View : register(c4);\n"
     "float4x4 Texm : register(c8);\n"
@@ -229,21 +240,6 @@ static const char* PostProcessPixelShaderSrc =
     "   return LensCenter + Scale * theta1;\n"
     "}\n"
 
-    /*
-    // Same as above, but less efficient going through radius.
-    "float2 HmdWarp(float2 in01)\n"
-    "{\n"
-    "   float2 theta = (in01 - LensCenter) * ScaleIn;\n" // Scales to [-1, 1]
-    "   float  rSq= theta.x * theta.x + theta.y * theta.y;\n"
-    "   float  r = sqrt(rSq);\n"
-    "   float2 runit = theta / r; "
-    "   float2 dist = r * (HmdWarpParam.x + HmdWarpParam.y * rSq + \n"
-    "                      HmdWarpParam.z * rSq * rSq + HmdWarpParam.w * rSq * rSq * rSq);\n"
-    "   return LensCenter + Scale * runit * dist;\n"
-    "}\n"
-    */
-
-
     "float4 main(in float4 oPosition : SV_Position, in float4 oColor : COLOR,\n"
     " in float2 oTexCoord : TEXCOORD0) : SV_Target\n"
     "{\n"
@@ -253,50 +249,6 @@ static const char* PostProcessPixelShaderSrc =
     "   return Texture.Sample(Linear, tc);\n"
     "}\n";
 
-
-/*
-"float2 HmdWarpTan(float2 in01)\n"
-"{\n"
-"   float2 inhc = (in01 - Center) * ScaleIn;\n"
-"   float  r = sqrt(inhc.x * inhc.x + inhc.y * inhc.y);\n"
-"   float2 theta = normalize(inhc);\n"
-
-"   float  z = HmdWarpParam.x;\n"
-"   float  outr = tan(r * z) * HmdWarpParam.y;\n"
-
-"   return Center + Scale * theta * outr;\n"
-"}\n"
-*/
-
-
-/*
-Texture2D    Texture : register(t0);
-SamplerState Linear : register(s0);
-float2       LensCenter;
-float2       ScreenCenter;
-float2       Scale;
-float2       ScaleIn;
-float4       HmdWarpParam;
-
-// Scales input texture coordinates for distortion.
-float2 HmdWarp(float2 in01)
-{
-   float2 theta  = (in01 - LensCenter) * ScaleIn; // Scales to [-1, 1]
-   float  rSq    = theta.x * theta.x + theta.y * theta.y;
-   float2 theta1 = theta * (HmdWarpParam.x + HmdWarpParam.y * rSq +
-                            HmdWarpParam.z * rSq * rSq + HmdWarpParam.w * rSq * rSq * rSq);
-   return LensCenter + Scale * theta1;
-}
-
-float4 main(in float4 oPosition : SV_Position, in float4 oColor : COLOR,
-            in float2 oTexCoord : TEXCOORD0) : SV_Target
-{
-   float2 tc = HmdWarp(oTexCoord);
-   if (any(clamp(tc, ScreenCenter-float2(0.25,0.5), ScreenCenter+float2(0.25, 0.5)) - tc))
-       return 0;
-   return Texture.Sample(Linear, tc);
-};
-*/
 
 
 static const char* VShaderSrcs[VShader_Count] =
@@ -1301,190 +1253,309 @@ void RenderDevice::SetTexture(Render::ShaderStage stage, int slot, const Texture
     }
 }
 
+void RenderDevice::GenerateSubresourceData(
+    unsigned imageWidth, unsigned imageHeight, int format, unsigned imageDimUpperLimit,
+    const void* rawBytes, D3D1x_(SUBRESOURCE_DATA)* subresData,
+    unsigned& largestMipWidth, unsigned& largestMipHeight, unsigned& byteSize, unsigned& effectiveMipCount)
+{
+    largestMipWidth  = 0;
+    largestMipHeight = 0;
+
+    unsigned sliceLen   = 0;
+    unsigned rowLen     = 0;
+    unsigned numRows    = 0;
+    const byte* mipBytes = static_cast<const byte*>(rawBytes);
+
+    unsigned index = 0;
+    unsigned subresWidth = imageWidth;
+    unsigned subresHeight = imageHeight;
+    unsigned numMips = effectiveMipCount;
+    for(unsigned i = 0; i < numMips; i++)
+    {
+        unsigned bytesPerBlock = 0;
+        if (format == DXGI_FORMAT_BC1_UNORM)
+        {
+            bytesPerBlock = 8;
+        }
+        else if (format == DXGI_FORMAT_BC3_UNORM)
+        {
+            bytesPerBlock = 16;
+        }
+
+        unsigned blockWidth = 0;
+        blockWidth = (subresWidth + 3) / 4;
+        if (blockWidth < 1)
+        {
+            blockWidth = 1;
+        }
+
+        unsigned blockHeight = 0;
+        blockHeight = (subresHeight + 3) / 4;
+        if (blockHeight < 1)
+        {
+            blockHeight = 1;
+        }
+
+        rowLen = blockWidth * bytesPerBlock;
+        numRows = blockHeight;
+        sliceLen = rowLen * numRows;
+
+        if (imageDimUpperLimit == 0 || (effectiveMipCount == 1) ||
+            (subresWidth <= imageDimUpperLimit && subresHeight <= imageDimUpperLimit))
+        {
+            if(!largestMipWidth)
+            {
+                largestMipWidth = subresWidth;
+                largestMipHeight = subresHeight;
+            }
+
+            subresData[index].pSysMem = (const void*)mipBytes;
+            subresData[index].SysMemPitch = static_cast<UINT>(rowLen);
+            subresData[index].SysMemSlicePitch = static_cast<UINT>(sliceLen);
+            byteSize += sliceLen;
+            ++index;
+        }
+        else
+        {
+            effectiveMipCount--;
+        }
+
+        mipBytes += sliceLen;
+
+        subresWidth = subresWidth >> 1;
+        subresHeight = subresHeight >> 1;
+        if (subresWidth <= 0)
+        {
+            subresWidth = 1;
+        }
+        if (subresHeight <= 0)
+        {
+            subresHeight = 1;
+        }
+    }
+}
+
+#define _256Megabytes 268435456
+#define _512Megabytes 536870912
+
 Texture* RenderDevice::CreateTexture(int format, int width, int height, const void* data, int mipcount)
 {
-    OVR_UNUSED(mipcount);
-
-    DXGI_FORMAT d3dformat;
-    int         bpp;
-    switch(format & Texture_TypeMask)
+    UPInt gpuMemorySize = 0;
     {
-    case Texture_RGBA:
-        bpp = 4;
-        d3dformat = DXGI_FORMAT_R8G8B8A8_UNORM;
-        break;
-    case Texture_R:
-        bpp = 1;
-        d3dformat = DXGI_FORMAT_R8_UNORM;
-        break;
-    case Texture_Depth:
-        bpp = 0;
-        d3dformat = DXGI_FORMAT_D32_FLOAT;
-        break;
-    default:
-        return NULL;
+        IDXGIDevice* pDXGIDevice;
+        Device->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice);
+        IDXGIAdapter * pDXGIAdapter;
+        pDXGIDevice->GetAdapter(&pDXGIAdapter);
+        DXGI_ADAPTER_DESC adapterDesc;
+        pDXGIAdapter->GetDesc(&adapterDesc);
+        gpuMemorySize = adapterDesc.DedicatedVideoMemory;
+        pDXGIAdapter->Release();
+        pDXGIDevice->Release();
     }
-
-    int samples = (format & Texture_SamplesMask);
-    if (samples < 1)
+ 
+    unsigned imageDimUpperLimit = 0;
+    if(gpuMemorySize <= _256Megabytes)
     {
-        samples = 1;
+        imageDimUpperLimit = 512;
     }
-
-    Texture* NewTex = new Texture(this, format, width, height);
-    NewTex->Samples = samples;
-
-    D3D1x_(TEXTURE2D_DESC) dsDesc;
-    dsDesc.Width     = width;
-    dsDesc.Height    = height;
-    dsDesc.MipLevels = (format == (Texture_RGBA | Texture_GenMipmaps) && data) ? GetNumMipLevels(width, height) : 1;
-    dsDesc.ArraySize = 1;
-    dsDesc.Format    = d3dformat;
-    dsDesc.SampleDesc.Count = samples;
-    dsDesc.SampleDesc.Quality = 0;
-    dsDesc.Usage     = D3D1x_(USAGE_DEFAULT);
-    dsDesc.BindFlags = D3D1x_(BIND_SHADER_RESOURCE);
-    dsDesc.CPUAccessFlags = 0;
-    dsDesc.MiscFlags      = 0;
-
-    if (format & Texture_RenderTarget)
+    else if(gpuMemorySize <= _512Megabytes)
     {
-        if ((format & Texture_TypeMask) == Texture_Depth)
-            // We don't use depth textures, and creating them in d3d10 requires different options.
+        imageDimUpperLimit = 1024;
+    }
+    if(format == Texture_DXT1 || format == Texture_DXT5)
+    {
+        int convertedFormat = format == Texture_DXT1 ? DXGI_FORMAT_BC1_UNORM : DXGI_FORMAT_BC3_UNORM;
+        unsigned largestMipWidth = 0;
+        unsigned largestMipHeight = 0;
+        unsigned effectiveMipCount = mipcount;
+        unsigned textureSize = 0;
+
+#ifdef OVR_DEFINE_NEW
+#undef new
+#endif
+
+        D3D1x_(SUBRESOURCE_DATA)* subresData = new D3D1x_(SUBRESOURCE_DATA)[mipcount];
+        GenerateSubresourceData(width, height, convertedFormat, imageDimUpperLimit, data, subresData, largestMipWidth,
+                                largestMipHeight, textureSize, effectiveMipCount);
+        TotalTextureMemoryUsage += textureSize;
+
+#ifdef OVR_DEFINE_NEW
+#define new OVR_DEFINE_NEW
+#endif
+
+        if (!Device || !subresData)
         {
-            dsDesc.BindFlags = D3D1x_(BIND_DEPTH_STENCIL);
+            return NULL;
         }
-        else
+        int samples = (Texture_RGBA & Texture_SamplesMask);
+        if (samples < 1)
         {
-            dsDesc.BindFlags |= D3D1x_(BIND_RENDER_TARGET);
+            samples = 1;
         }
-    }
 
-    HRESULT hr = Device->CreateTexture2D(&dsDesc, NULL, &NewTex->Tex.GetRawRef());
-    if (FAILED(hr))
-    {
-        OVR_DEBUG_LOG_TEXT(("Failed to create 2D D3D texture."));
-        NewTex->Release();
-        return NULL;
-    }
-    if (dsDesc.BindFlags & D3D1x_(BIND_SHADER_RESOURCE))
-    {
-        Device->CreateShaderResourceView(NewTex->Tex, NULL, &NewTex->TexSv.GetRawRef());
-    }
+        Texture* NewTex = new Texture(this, format, largestMipWidth, largestMipHeight);
+        NewTex->Samples = samples;
 
-    if (data)
-    {
-        Context->UpdateSubresource(NewTex->Tex, 0, NULL, data, width * bpp, width * height * bpp);
-        if (format == (Texture_RGBA | Texture_GenMipmaps))
+        D3D1x_(TEXTURE2D_DESC) desc;
+        desc.Width      = largestMipWidth;
+        desc.Height     = largestMipHeight;
+        desc.MipLevels  = mipcount;
+        desc.ArraySize  = 1;
+        desc.Format     = static_cast<DXGI_FORMAT>(convertedFormat);
+        desc.SampleDesc.Count = samples;
+        desc.SampleDesc.Quality = 0;
+        desc.Usage      = D3D1x_(USAGE_DEFAULT);
+        desc.BindFlags  = D3D1x_(BIND_SHADER_RESOURCE);
+        desc.CPUAccessFlags = 0;
+        desc.MiscFlags  = 0;
+
+        HRESULT hr = Device->CreateTexture2D(&desc, static_cast<D3D1x_(SUBRESOURCE_DATA)*>(subresData),
+                                             &NewTex->Tex.GetRawRef());
+        delete [] subresData;
+
+        if (SUCCEEDED(hr) && NewTex != 0)
         {
-            int srcw = width, srch = height;
-            int level = 0;
-            UByte* mipmaps = NULL;
-            do
+            D3D1x_(SHADER_RESOURCE_VIEW_DESC) SRVDesc;
+            memset(&SRVDesc, 0, sizeof(SRVDesc));
+            SRVDesc.Format = static_cast<DXGI_FORMAT>(format);
+            SRVDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
+            SRVDesc.Texture2D.MipLevels = desc.MipLevels;
+
+            hr = Device->CreateShaderResourceView(NewTex->Tex, NULL, &NewTex->TexSv.GetRawRef());
+
+            if (FAILED(hr))
             {
-                level++;
-                int mipw = srcw >> 1;
-                if (mipw < 1)
-                {
-                    mipw = 1;
-                }
-                int miph = srch >> 1;
-                if (miph < 1)
-                {
-                    miph = 1;
-                }
-                if (mipmaps == NULL)
-                {
-                    mipmaps = (UByte*)OVR_ALLOC(mipw * miph * 4);
-                }
-                FilterRgba2x2(level == 1 ? (const UByte*)data : mipmaps, srcw, srch, mipmaps);
-                Context->UpdateSubresource(NewTex->Tex, level, NULL, mipmaps, mipw * bpp, miph * bpp);
-                srcw = mipw;
-                srch = miph;
+                NewTex->Release();
+                return NULL;
             }
-            while(srcw > 1 || srch > 1);
-
-            if (mipmaps != NULL)
-            {
-                OVR_FREE(mipmaps);
-            }
+            return NewTex;
         }
-    }
 
-    if (format & Texture_RenderTarget)
-    {
-        if ((format & Texture_TypeMask) == Texture_Depth)
-        {
-            Device->CreateDepthStencilView(NewTex->Tex, NULL, &NewTex->TexDsv.GetRawRef());
-        }
-        else
-        {
-            Device->CreateRenderTargetView(NewTex->Tex, NULL, &NewTex->TexRtv.GetRawRef());
-        }
-    }
-
-    return NewTex;
-}
-
-Texture* RenderDevice::CreateTexture(unsigned int resDim, unsigned int twidth, unsigned int theight, unsigned int mipCount, unsigned int arraySize, unsigned int format, void *initData)
-{
-	if (!Device || !initData)
-    {
         return NULL;
     }
-
-    switch(resDim)
+    else
     {
-		case D3D1x_(RESOURCE_DIMENSION_TEXTURE2D):
-		{
-			int samples = (Texture_RGBA & Texture_SamplesMask);
-			if (samples < 1)
-			{
-				samples = 1;
-			}
+        DXGI_FORMAT d3dformat;
+        int         bpp;
+        switch(format & Texture_TypeMask)
+        {
+        case Texture_RGBA:
+            bpp = 4;
+            d3dformat = DXGI_FORMAT_R8G8B8A8_UNORM;
+            break;
+        case Texture_R:
+            bpp = 1;
+            d3dformat = DXGI_FORMAT_R8_UNORM;
+            break;
+        case Texture_Depth:
+            bpp = 0;
+            d3dformat = DXGI_FORMAT_D32_FLOAT;
+            break;
+        default:
+            return NULL;
+        }
 
-			Texture* NewTex = new Texture(this, format, twidth, theight);
-			NewTex->Samples = samples;
+        int samples = (format & Texture_SamplesMask);
+        if (samples < 1)
+        {
+            samples = 1;
+        }
 
-			D3D1x_(TEXTURE2D_DESC) desc;
-			desc.Width = twidth;
-			desc.Height = theight;
-			desc.MipLevels = mipCount;
-			desc.ArraySize = arraySize;
-			desc.Format = static_cast<DXGI_FORMAT>(format);
-			desc.SampleDesc.Count = samples;
-			desc.SampleDesc.Quality = 0;
-			desc.Usage = D3D1x_(USAGE_DEFAULT);
-			desc.BindFlags = D3D1x_(BIND_SHADER_RESOURCE);
-			desc.CPUAccessFlags = 0;
-			desc.MiscFlags = 0;
+        Texture* NewTex = new Texture(this, format, width, height);
+        NewTex->Samples = samples;
 
-			HRESULT hr = Device->CreateTexture2D(&desc, static_cast<D3D1x_(SUBRESOURCE_DATA)*>(initData), &NewTex->Tex.GetRawRef());
+        D3D1x_(TEXTURE2D_DESC) dsDesc;
+        dsDesc.Width     = width;
+        dsDesc.Height    = height;
+        dsDesc.MipLevels = (format == (Texture_RGBA | Texture_GenMipmaps) && data) ? GetNumMipLevels(width, height) : 1;
+        dsDesc.ArraySize = 1;
+        dsDesc.Format    = d3dformat;
+        dsDesc.SampleDesc.Count = samples;
+        dsDesc.SampleDesc.Quality = 0;
+        dsDesc.Usage     = D3D1x_(USAGE_DEFAULT);
+        dsDesc.BindFlags = D3D1x_(BIND_SHADER_RESOURCE);
+        dsDesc.CPUAccessFlags = 0;
+        dsDesc.MiscFlags      = 0;
 
-			if (SUCCEEDED(hr) && NewTex != 0)
-			{
-				D3D1x_(SHADER_RESOURCE_VIEW_DESC) SRVDesc;
-				memset(&SRVDesc, 0, sizeof(SRVDesc));
-				SRVDesc.Format = static_cast<DXGI_FORMAT>(format);
-				SRVDesc.ViewDimension = D3D_SRV_DIMENSION_TEXTURE2D;
-				SRVDesc.Texture2D.MipLevels = desc.MipLevels;
+        if (format & Texture_RenderTarget)
+        {
+            if ((format & Texture_TypeMask) == Texture_Depth)
+                // We don't use depth textures, and creating them in d3d10 requires different options.
+            {
+                dsDesc.BindFlags = D3D1x_(BIND_DEPTH_STENCIL);
+            }
+            else
+            {
+                dsDesc.BindFlags |= D3D1x_(BIND_RENDER_TARGET);
+            }
+        }
 
-				hr = Device->CreateShaderResourceView(NewTex->Tex, NULL, &NewTex->TexSv.GetRawRef());
+        HRESULT hr = Device->CreateTexture2D(&dsDesc, NULL, &NewTex->Tex.GetRawRef());
+        if (FAILED(hr))
+        {
+            OVR_DEBUG_LOG_TEXT(("Failed to create 2D D3D texture."));
+            NewTex->Release();
+            return NULL;
+        }
+        if (dsDesc.BindFlags & D3D1x_(BIND_SHADER_RESOURCE))
+        {
+            Device->CreateShaderResourceView(NewTex->Tex, NULL, &NewTex->TexSv.GetRawRef());
+        }
 
-				if (FAILED(hr))
-				{
-					NewTex->Release();
-					return NULL;
-				}
-				return NewTex;
-			}
-		}
-		break;
+        if (data)
+        {
+            Context->UpdateSubresource(NewTex->Tex, 0, NULL, data, width * bpp, width * height * bpp);
+            if (format == (Texture_RGBA | Texture_GenMipmaps))
+            {
+                int srcw = width, srch = height;
+                int level = 0;
+                UByte* mipmaps = NULL;
+                do
+                {
+                    level++;
+                    int mipw = srcw >> 1;
+                    if (mipw < 1)
+                    {
+                        mipw = 1;
+                    }
+                    int miph = srch >> 1;
+                    if (miph < 1)
+                    {
+                        miph = 1;
+                    }
+                    if (mipmaps == NULL)
+                    {
+                        mipmaps = (UByte*)OVR_ALLOC(mipw * miph * 4);
+                    }
+                    FilterRgba2x2(level == 1 ? (const UByte*)data : mipmaps, srcw, srch, mipmaps);
+                    Context->UpdateSubresource(NewTex->Tex, level, NULL, mipmaps, mipw * bpp, miph * bpp);
+                    srcw = mipw;
+                    srch = miph;
+                }
+                while(srcw > 1 || srch > 1);
+
+                if (mipmaps != NULL)
+                {
+                    OVR_FREE(mipmaps);
+                }
+            }
+        }
+
+        if (format & Texture_RenderTarget)
+        {
+            if ((format & Texture_TypeMask) == Texture_Depth)
+            {
+                Device->CreateDepthStencilView(NewTex->Tex, NULL, &NewTex->TexDsv.GetRawRef());
+            }
+            else
+            {
+                Device->CreateRenderTargetView(NewTex->Tex, NULL, &NewTex->TexRtv.GetRawRef());
+            }
+        }
+
+        return NewTex;
     }
-
-    return NULL;
 }
-
 
 // Rendering
 

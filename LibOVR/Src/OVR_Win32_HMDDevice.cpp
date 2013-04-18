@@ -229,7 +229,7 @@ void HMDDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
             if (wcsstr(ddm.DeviceID, L"RTD2205") || 
                 wcsstr(ddm.DeviceID, L"CVT0003") || 
                 wcsstr(ddm.DeviceID, L"MST0030") ||
-                wcsstr(ddm.DeviceID, L"OVR0001") ) // SLA 1.
+                wcsstr(ddm.DeviceID, L"OVR00") ) // Part of Oculus EDID.
             {
                 String deviceId(ddm.DeviceID);
                 String displayDeviceName(ddm.DeviceName);
