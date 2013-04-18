@@ -210,12 +210,14 @@ protected:
     // At this point, all allocations should've been freed.
     virtual void    onSystemShutdown() { }
 
-private:
+public:
     static  void    setInstance(Allocator* palloc)    
     {
         OVR_ASSERT((pInstance == 0) || (palloc == 0));
         pInstance = palloc;
     }
+
+private:
 
     static Allocator* pInstance;
 };

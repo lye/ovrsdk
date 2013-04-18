@@ -271,7 +271,8 @@ public:
 
     // We don't need there on Manager since it isn't assigned to DeviceHandle.
     virtual DeviceCreateDesc* Clone() const                        { return 0; }
-    virtual bool        MatchDevice(const DeviceCreateDesc&) const { return 0; }
+    virtual MatchResult MatchDevice(const DeviceCreateDesc&,
+                                    DeviceCreateDesc**) const      { return Match_None; }
     virtual DeviceBase* NewDeviceInstance()                        { return 0; }
     virtual bool        GetDeviceInfo(DeviceInfo*) const           { return false; }
 };
@@ -385,7 +386,7 @@ DeviceBase* DeviceManagerImpl::CreateDevice_MgrThread(DeviceCreateDesc* createDe
     return device;
 }
 
-void DeviceManagerImpl::ReleaseDevice_MgrThread(DeviceBase* device)
+Void DeviceManagerImpl::ReleaseDevice_MgrThread(DeviceBase* device)
 {
     // descKeepAlive will keep ManagerLock object alive as well,
     // allowing us to exit gracefully.    
@@ -403,7 +404,7 @@ void DeviceManagerImpl::ReleaseDevice_MgrThread(DeviceBase* device)
             {
                 // We decreented from initial count higher then 1;
                 // nothing else to do.
-                return;
+                return 0;
             }        
         }
         else if (devCommon->RefCount.CompareAndSet_NoSync(1, 0))
@@ -422,43 +423,71 @@ void DeviceManagerImpl::ReleaseDevice_MgrThread(DeviceBase* device)
     descKeepAlive->pDevice = 0;
     devCommon->Shutdown();
     delete device;
+    return 0;
 }
 
 
 
-void DeviceManagerImpl::EnumerateAllFactoryDevices()
+Void DeviceManagerImpl::EnumerateAllFactoryDevices()
 {
-    DeviceFactory* factory = Factories.GetFirst();
-    while(!Factories.IsNull(factory))
-    {
-        EnumerateFactoryDevices(factory);
-        factory = factory->pNext;
-    }
-}
-
-// Enumerates devices for a particular factory.
-void DeviceManagerImpl::EnumerateFactoryDevices(DeviceFactory* factory)
-{
-        
     // 1. Mark matching devices as NOT enumerated.
     // 2. Call factory to enumerate all HW devices, adding any device that 
     //    was not matched.
     // 3. Remove non-matching devices.
 
     Lock::Locker deviceLock(GetLock());
-   
+
     DeviceCreateDesc* devDesc, *nextdevDesc;
 
     // 1.
     for(devDesc = Devices.GetFirst();
         !Devices.IsNull(devDesc);  devDesc = devDesc->pNext)
     {
-        if (devDesc->pFactory == factory)
+        //if (devDesc->pFactory == factory)
             devDesc->Enumerated = false;
+    }
+    
+    // 2.
+    DeviceFactory* factory = Factories.GetFirst();
+    while(!Factories.IsNull(factory))
+    {
+        EnumerateFactoryDevices(factory);
+        factory = factory->pNext;
     }
 
     
-    // 2.
+    // 3.
+    for(devDesc = Devices.GetFirst();
+        !Devices.IsNull(devDesc);  devDesc = nextdevDesc)
+    {
+        // In case 'devDesc' gets removed.
+        nextdevDesc = devDesc->pNext; 
+
+        if (//(devDesc->pFactory == factory) && 
+            !devDesc->Enumerated)
+        {
+            // This deletes the devDesc for HandleCount == 0 due to Release in DeviceHandle.
+            CallOnDeviceRemoved(devDesc);
+
+            /*
+            if (devDesc->HandleCount == 0)
+            {                
+                // Device must be dead if it ever existed, since it AddRefs to us.
+                // ~DeviceCreateDesc removes its node from list.
+                OVR_ASSERT(!devDesc->pDevice);
+                delete devDesc;
+            }
+            */
+        }
+    }
+
+    return 0;
+}
+
+// Enumerates devices for a particular factory.
+Void DeviceManagerImpl::EnumerateFactoryDevices(DeviceFactory* factory)
+{
+       
     class FactoryEnumerateVisitor : public DeviceFactory::EnumerateVisitor
     {        
         DeviceManagerImpl* pManager;
@@ -472,14 +501,24 @@ void DeviceManagerImpl::EnumerateFactoryDevices(DeviceFactory* factory)
             DeviceCreateDesc* devDesc;
             
             // If found, mark as enumerated and we are done.
+            DeviceCreateDesc* descCandidate = 0;
+
             for(devDesc = pManager->Devices.GetFirst();
                 !pManager->Devices.IsNull(devDesc);  devDesc = devDesc->pNext)
             {
-                if ((devDesc->pFactory == pFactory) && devDesc->MatchDevice(createDesc))
+                DeviceCreateDesc::MatchResult mr = devDesc->MatchDevice(createDesc, &descCandidate);
+                if (mr == DeviceCreateDesc::Match_Found)
                 {
                     devDesc->Enumerated = true;
                     return;
                 }
+            }
+
+            // Update candidate (this may involve writing fields to HMDDevice createDesc).
+            if (descCandidate && descCandidate->UpdateMatchedCandidate(createDesc))
+            {
+                descCandidate->Enumerated = true;
+                return;
             }
 
             // If not found, add new device.
@@ -497,30 +536,7 @@ void DeviceManagerImpl::EnumerateFactoryDevices(DeviceFactory* factory)
     factory->EnumerateDevices(newDeviceVisitor);
 
 
-    // 3.
-    for(devDesc = Devices.GetFirst();
-        !Devices.IsNull(devDesc);  devDesc = nextdevDesc)
-    {
-        // In case 'devDesc' gets removed.
-        nextdevDesc = devDesc->pNext; 
-
-        if ((devDesc->pFactory == factory) && !devDesc->Enumerated)
-        {
-            // This deletes the devDesc for HandleCount == 0 due to Release in DeviceHandle.
-            CallOnDeviceRemoved(devDesc);
-
-            /*
-            if (devDesc->HandleCount == 0)
-            {                
-                // Device must be dead if it ever existed, since it AddRefs to us.
-                // ~DeviceCreateDesc removes its node from list.
-                OVR_ASSERT(!devDesc->pDevice);
-                delete devDesc;
-            }
-            */
-        }
-    }
-    
+    return 0;
 }
 
 

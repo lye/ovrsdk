@@ -24,7 +24,7 @@ namespace OVR { namespace Win32 {
 
 struct LatencyTestSamplesMessage;
 struct LatencyTestButtonMessage;
-struct LatencyTestChangeColorMessage;
+struct LatencyTestStartedMessage;
 struct LatencyTestColorDetectedMessage;
 
 //-------------------------------------------------------------------------------------
@@ -60,13 +60,17 @@ public:
 
     virtual DeviceBase* NewDeviceInstance();
 
-    virtual bool MatchDevice(const DeviceCreateDesc& other) const
+    virtual MatchResult MatchDevice(const DeviceCreateDesc& other,
+                                    DeviceCreateDesc**) const
     {
-        if (other.Type != Device_LatencyTester)
-            return false;
-        const LatencyTestDeviceCreateDesc& s2 = (const LatencyTestDeviceCreateDesc&) other;
-        return (HIDDesc.Path == s2.HIDDesc.Path) &&
-               (HIDDesc.SerialNumber == s2.HIDDesc.SerialNumber);
+        if ((other.Type == Device_LatencyTester) && (pFactory == other.pFactory))
+        {            
+            const LatencyTestDeviceCreateDesc& s2 = (const LatencyTestDeviceCreateDesc&) other;
+            if ((HIDDesc.Path == s2.HIDDesc.Path) &&
+                (HIDDesc.SerialNumber == s2.HIDDesc.SerialNumber))
+                return Match_Found;
+        }
+        return Match_None;
     }
 
     virtual bool        GetDeviceInfo(DeviceInfo* info) const;
@@ -99,8 +103,9 @@ public:
     virtual bool SetConfiguration(const OVR::LatencyTestConfiguration& configuration, bool waitFlag);
     virtual bool SetCalibrate(const OVR::LatencyTestCalibrate& calibrate, bool waitFlag);
     virtual bool SetStartTest(const OVR::LatencyTestStartTest& start, bool waitFlag);
+    virtual bool SetDisplay(const OVR::LatencyTestDisplay& display, bool waitFlag);
 
-protected:    
+protected:
     bool    openDevice(const char** errorFormatString);
     void    closeDevice();
     void    closeDeviceOnIOError();
@@ -124,12 +129,13 @@ protected:
 	bool    setConfiguration(const LatencyTestConfiguration& configuration);
     bool    setCalibrate(const LatencyTestCalibrate& calibrate);
     bool    setStartTest(const OVR::LatencyTestStartTest& start);
+    bool    setDisplay(const OVR::LatencyTestDisplay& display);
 
 
     // Called for decoded messages
     void onLatencyTestSamplesMessage(LatencyTestSamplesMessage* message);
     void onLatencyTestButtonMessage(LatencyTestButtonMessage* message);
-    void onLatencyTestChangeColorMessage(LatencyTestChangeColorMessage* message);
+    void onLatencyTestStartedMessage(LatencyTestStartedMessage* message);
     void onLatencyTestColorDetectedMessage(LatencyTestColorDetectedMessage* message);
 
     // Helpers to reduce casting.

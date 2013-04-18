@@ -1,6 +1,6 @@
 /************************************************************************************
 
-PublicHeader:   None
+PublicHeader:   OVR
 Filename    :   OVR_Timer.h
 Content     :   Provides static functions for precise timing
 Created     :   September 19, 2012

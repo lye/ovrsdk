@@ -20,23 +20,33 @@ otherwise accompanies this software in either electronic or hard copy form.
 
 namespace OVR {
 
-static const UInt32     DEFAULT_NUMBER_OF_SAMPLES = 10;
-static const UInt32     TIME_TO_WAIT_FOR_FIRST_COLOR_TO_SETTLE_MILLIS = 100;
-static const UInt32     TIMEOUT_WAITING_FOR_START_SIGNAL_MILLIS = 100;
-static const ColorRGB   START_COLOR(0, 0, 0);
-static const ColorRGB   END_COLOR(255, 255, 255);
+static const UInt32     TIME_TO_WAIT_FOR_SETTLE_PRE_CALIBRATION = 16*10;
+static const UInt32     TIME_TO_WAIT_FOR_SETTLE_POST_CALIBRATION = 16*10;
+static const UInt32     TIME_TO_WAIT_FOR_SETTLE_POST_MEASUREMENT = 16*5;
+static const UInt32     DEFAULT_NUMBER_OF_SAMPLES = 10;                 // For both color 1->2 and color 2->1 transitions.
+static const UInt32     INITIAL_SAMPLES_TO_IGNORE = 4;
+static const UInt32     TIMEOUT_WAITING_FOR_TEST_STARTED = 1000;
+static const UInt32     TIMEOUT_WAITING_FOR_COLOR_DETECTED = 4000;
+static const ColorRGB   CALIBRATE_BLACK(0, 0, 0);
+static const ColorRGB   CALIBRATE_WHITE(255, 255, 255);
+static const ColorRGB   COLOR1(0, 0, 0);
+static const ColorRGB   COLOR2(255, 255, 255);
 static const ColorRGB   SENSOR_DETECT_THRESHOLD(128, 255, 255);
+static const float      BIG_FLOAT = 1000000.0f;
+static const float      SMALL_FLOAT = -1000000.0f;
 
 //-------------------------------------------------------------------------------------
 // ***** LatencyTestUtil
 
 LatencyTestUtil::LatencyTestUtil(LatencyTestDevice* device)
- :  Handler(getThis()), State(State_Default), NumberOfSamples(DEFAULT_NUMBER_OF_SAMPLES)
+ :  Handler(getThis())
 {
     if (device != NULL)
     {
         SetDevice(device);
     }
+
+    reset();
 }
 
 LatencyTestUtil::~LatencyTestUtil()
@@ -77,12 +87,7 @@ bool LatencyTestUtil::SetDevice(LatencyTestDevice* device)
     return true;
 }
 
-void LatencyTestUtil::SetNumberOfSamples(UInt32 numberOfSamples)
-{
-    NumberOfSamples = numberOfSamples;
-}
-
-void LatencyTestUtil::handleMessage(const Message& msg)
+void LatencyTestUtil::handleMessage(const Message& msg, LatencyTestMessageType latencyTestMessage)
 {
 
     // For debugging.
@@ -100,57 +105,196 @@ void LatencyTestUtil::handleMessage(const Message& msg)
     }
 */
 
-
-    if (msg.Type == Message_DeviceRemoved)
+    if (latencyTestMessage == LatencyTest_Timer)
     {
-        // Reset.
-        State = State_Default;
-    }
-    else if (State == State_Default)
-    {
-        if (msg.Type == Message_LatencyTestButton)
+        if (State == State_WaitingForSettlePreCalibrationColorBlack)
         {
-            TransitionToWaitingForStartColorToSettle();
-            OVR_DEBUG_LOG(("** 1 - Initiated."));
+            // Send calibrate message to device and wait a while.
+            LatencyTestCalibrate calibrate(CALIBRATE_BLACK);
+            Device->SetCalibrate(calibrate);
+
+            State = State_WaitingForSettlePostCalibrationColorBlack;
+            OVR_DEBUG_LOG(("State_WaitingForSettlePreCalibrationColorBlack -> State_WaitingForSettlePostCalibrationColorBlack."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_POST_CALIBRATION);
+        }
+        else if (State == State_WaitingForSettlePostCalibrationColorBlack)
+        {
+            // Change color to white and wait a while.
+            RenderColor = CALIBRATE_WHITE;
+
+            State = State_WaitingForSettlePreCalibrationColorWhite;
+            OVR_DEBUG_LOG(("State_WaitingForSettlePostCalibrationColorBlack -> State_WaitingForSettlePreCalibrationColorWhite."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_PRE_CALIBRATION);
+        }
+        else if (State == State_WaitingForSettlePreCalibrationColorWhite)
+        {
+            // Send calibrate message to device and wait a while.
+            LatencyTestCalibrate calibrate(CALIBRATE_WHITE);
+            Device->SetCalibrate(calibrate);
+
+            State = State_WaitingForSettlePostCalibrationColorWhite;
+            OVR_DEBUG_LOG(("State_WaitingForSettlePreCalibrationColorWhite -> State_WaitingForSettlePostCalibrationColorWhite."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_POST_CALIBRATION);
+        }
+        else if (State == State_WaitingForSettlePostCalibrationColorWhite)
+        {
+            // Calibration is done. Switch to color 1 and wait for it to settle.
+            RenderColor = COLOR1;
+
+            State = State_WaitingForSettlePostMeasurement;
+            OVR_DEBUG_LOG(("State_WaitingForSettlePostCalibrationColorWhite -> State_WaitingForSettlePostMeasurement."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_POST_MEASUREMENT);
+        }
+        else if (State == State_WaitingForSettlePostMeasurement)
+        {
+            // Prepare for next measurement.
+
+            // Create a new result object.
+            MeasurementResult* pResult = new MeasurementResult();
+            Results.PushBack(pResult);
+
+            State = State_WaitingToTakeMeasurement;
+            OVR_DEBUG_LOG(("State_WaitingForSettlePostMeasurement -> State_WaitingToTakeMeasurement."));
+        }
+        else if (State == State_WaitingForTestStarted)
+        {
+            // We timed out waiting for 'TestStarted'. Abandon this measurement and setup for the next.
+            getActiveResult()->TimedOutWaitingForTestStarted = true;
+
+            State = State_WaitingForSettlePostMeasurement;
+            OVR_DEBUG_LOG(("** Timed out waiting for 'TestStarted'."));
+            OVR_DEBUG_LOG(("State_WaitingForTestStarted -> State_WaitingForSettlePostMeasurement."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_POST_MEASUREMENT);
+        }
+        else if (State == State_WaitingForColorDetected)
+        {
+            // We timed out waiting for 'ColorDetected'. Abandon this measurement and setup for the next.
+            getActiveResult()->TimedOutWaitingForColorDetected = true;
+
+            State = State_WaitingForSettlePostMeasurement;
+            OVR_DEBUG_LOG(("** Timed out waiting for 'ColorDetected'."));
+            OVR_DEBUG_LOG(("State_WaitingForColorDetected -> State_WaitingForSettlePostMeasurement."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_POST_MEASUREMENT);
         }
     }
-    else if (State == Scene_WaitingForChangeColorSignal)
-    {        
-        if (msg.Type == Message_LatencyTestChangeColor)
-        {
-            // Set screen to the color specified in the message.
-            MessageLatencyTestChangeColor* pChange = (MessageLatencyTestChangeColor*) &msg;
-            RenderColorSignalled = pChange->TargetValue;
-
-            State = Scene_WaitingForColorDetectedSignal;
-
-            OVR_DEBUG_LOG(("** 3 - Received 'change color' signal."));
-        }
-    }
-    else if (State == Scene_WaitingForColorDetectedSignal)
+    else if (latencyTestMessage == LatencyTest_ProcessInputs)
     {
-        if (msg.Type == Message_LatencyTestColorDetected)
+        if (State == State_WaitingToTakeMeasurement)
         {
-            MessageLatencyTestColorDetected* pDetected = (MessageLatencyTestColorDetected*) &msg;
-            UInt16 elapsedTime = pDetected->Elapsed;
-            OVR_DEBUG_LOG(("** 4 - Received 'color detected'. Result = %d", elapsedTime));
-            Results.PushBack(elapsedTime);
-
-            if (Results.GetSize() < NumberOfSamples)
+            // Send 'StartTest' feature report with opposite target color.
+            if (RenderColor == COLOR1)
             {
-                // Take another measurement.
-                TransitionToWaitingForStartColorToSettle();
+                RenderColor = COLOR2;
             }
             else
             {
-                // We're done.
-                ProcessResults();
+                RenderColor = COLOR1;
+            }
 
-                Results.Clear();
-                State = State_Default;
+            getActiveResult()->TargetColor = RenderColor;
+            
+            // Record time so we can determine usb roundtrip time.
+            getActiveResult()->StartTestTicksMicroS = Timer::GetTicks();
+
+            LatencyTestStartTest startTest(RenderColor);
+            Device->SetStartTest(startTest);
+
+            State = State_WaitingForTestStarted;
+            OVR_DEBUG_LOG(("State_WaitingToTakeMeasurement -> State_WaitingForTestStarted."));
+
+            setTimer(TIMEOUT_WAITING_FOR_TEST_STARTED);
+        }
+    }
+    else if (msg.Type == Message_LatencyTestButton)
+    {
+        if (State == State_WaitingForButton)
+        {
+            // Set color to black and wait a while.
+            RenderColor = CALIBRATE_BLACK;
+
+            State = State_WaitingForSettlePreCalibrationColorBlack;
+            OVR_DEBUG_LOG(("State_WaitingForButton -> State_WaitingForSettlePreCalibrationColorBlack."));
+
+            setTimer(TIME_TO_WAIT_FOR_SETTLE_PRE_CALIBRATION);
+        }
+    }
+    else if (msg.Type == Message_LatencyTestStarted)
+    {
+        if (State == State_WaitingForTestStarted)
+        {
+            clearTimer();
+
+            // Record time so we can determine usb roundtrip time.
+            getActiveResult()->TestStartedTicksMicroS = Timer::GetTicks();
+            
+            State = State_WaitingForColorDetected;
+            OVR_DEBUG_LOG(("State_WaitingForTestStarted -> State_WaitingForColorDetected."));
+
+            setTimer(TIMEOUT_WAITING_FOR_COLOR_DETECTED);
+        }
+    }
+    else if (msg.Type == Message_LatencyTestColorDetected)
+    {
+        if (State == State_WaitingForColorDetected)
+        {
+            // Record time to detect color.
+            MessageLatencyTestColorDetected* pDetected = (MessageLatencyTestColorDetected*) &msg;
+            UInt16 elapsedTime = pDetected->Elapsed;
+            OVR_DEBUG_LOG(("Time to 'ColorDetected' = %d", elapsedTime));
+            
+            getActiveResult()->DeviceMeasuredElapsedMilliS = elapsedTime;
+
+            if (areResultsComplete())
+            {
+                // We're done.
+                processResults();
+                reset();
+            }
+            else
+            {
+                // Run another measurement.
+                State = State_WaitingForSettlePostMeasurement;
+                OVR_DEBUG_LOG(("State_WaitingForColorDetected -> State_WaitingForSettlePostMeasurement."));
+
+                setTimer(TIME_TO_WAIT_FOR_SETTLE_POST_MEASUREMENT);
             }
         }
     }
+    else if (msg.Type == Message_DeviceRemoved)
+    {
+        reset();
+    }
+}
+
+LatencyTestUtil::MeasurementResult* LatencyTestUtil::getActiveResult()
+{
+    OVR_ASSERT(!Results.IsEmpty());    
+    return Results.GetLast();
+}
+
+void LatencyTestUtil::setTimer(UInt32 timeMilliS)
+{
+    ActiveTimerMilliS = timeMilliS;
+}
+
+void LatencyTestUtil::clearTimer()
+{
+    ActiveTimerMilliS = 0;
+}
+
+void LatencyTestUtil::reset()
+{
+    Results.Clear();
+    State = State_WaitingForButton;
+
+    HaveOldTime = false;
+    ActiveTimerMilliS = 0;
 }
 
 LatencyTestUtil::LatencyTestHandler::~LatencyTestHandler()
@@ -165,16 +309,15 @@ void LatencyTestUtil::LatencyTestHandler::OnMessage(const Message& msg)
 
 void LatencyTestUtil::ProcessInputs()
 {
-    UpdateForTimeouts();
-
-    RenderColor = RenderColorSignalled;
+    updateForTimeouts();
+    handleMessage(Message(), LatencyTest_ProcessInputs);
 }
 
 bool LatencyTestUtil::DisplayScreenColor(ColorRGB& colorToDisplay)
 {
-    UpdateForTimeouts();
+    updateForTimeouts();
 
-    if (State == State_Default)
+    if (State == State_WaitingForButton)
     {
         return false;
     }
@@ -183,76 +326,195 @@ bool LatencyTestUtil::DisplayScreenColor(ColorRGB& colorToDisplay)
     return true;
 }
 
-void LatencyTestUtil::ProcessResults()
+const char*	LatencyTestUtil::GetResultsString()
 {
-    int minTime = INT_MAX;
-    int maxTime = INT_MIN;
-
-    float averageTime = 0.0f;
-
-    for (UInt32 i=0; i<Results.GetSize(); i++)
-    {
-        int res = Results[i];
-
-        minTime = min(res, minTime);
-        maxTime = max(res, maxTime);
-
-        averageTime += (float) res;
-    }
-
-    averageTime /= (float) Results.GetSize();
-
-    LogText("LATENCY TESTER - min:%d max:%d average:%.2f [", minTime, maxTime, averageTime);    
-    for (UInt32 i=0; i<Results.GetSize(); i++)
-    {
-        LogText("%d", Results[i]);
-        if (i != Results.GetSize()-1)
-        {
-            LogText(",");
-        }
-    }
-    LogText("]\n");
+	if (!ResultsString.IsEmpty() && ReturnedResultString != ResultsString.ToCStr())
+	{
+		ReturnedResultString = ResultsString;
+		return ReturnedResultString.ToCStr();
+	}
+    
+	return NULL;
 }
 
-void LatencyTestUtil::UpdateForTimeouts()
+bool LatencyTestUtil::areResultsComplete()
 {
-    UInt32 timeMillis = Timer::GetTicksMs();
+    UInt32 initialMeasurements = 0;
 
-    if (State == State_WaitingForStartColorToSettle)
+    UInt32 measurements1to2 = 0;
+    UInt32 measurements2to1 = 0;
+
+    MeasurementResult* pCurr = Results.GetFirst();
+    while(true)
     {
-        if (timeMillis > ActiveTimerMillis)
+        // Process.
+        if (!pCurr->TimedOutWaitingForTestStarted &&
+            !pCurr->TimedOutWaitingForColorDetected)
         {
-            TransitionToWaitingForChangeColorSignal();
-            OVR_DEBUG_LOG(("** 2 - Send 'start test' signal."));
+            initialMeasurements++;
+
+            if (initialMeasurements > INITIAL_SAMPLES_TO_IGNORE)
+            {
+                if (pCurr->TargetColor == COLOR2)
+                {
+                    measurements1to2++;
+                }
+                else
+                {
+                    measurements2to1++;
+                }
+            }
         }
+
+        if (Results.IsLast(pCurr))
+        {
+            break;
+        }
+        pCurr = Results.GetNext(pCurr);
     }
-    else if (State == Scene_WaitingForChangeColorSignal)
+
+    if (measurements1to2 >= DEFAULT_NUMBER_OF_SAMPLES &&
+        measurements2to1 >= DEFAULT_NUMBER_OF_SAMPLES)
     {
-        if (timeMillis > ActiveTimerMillis)
-        {
-            OVR_DEBUG_LOG(("** ! - Timed out waiting for 'change color' signal. Resend 'start test'."));
-            TransitionToWaitingForChangeColorSignal();
-        }
+        return true;
     }
+
+    return false;
 }
 
-void LatencyTestUtil::TransitionToWaitingForStartColorToSettle()
+void LatencyTestUtil::processResults()
 {
-    // Set screen to black and wait a while for it to settle.
-    ActiveTimerMillis = Timer::GetTicksMs() + TIME_TO_WAIT_FOR_FIRST_COLOR_TO_SETTLE_MILLIS;
 
-    RenderColorSignalled = START_COLOR;
-    RenderColor = START_COLOR;
-    State = State_WaitingForStartColorToSettle;
+    UInt32 minTime1To2 = UINT_MAX;
+    UInt32 maxTime1To2 = 0;
+    float averageTime1To2 = 0.0f;
+    UInt32 minTime2To1 = UINT_MAX;
+    UInt32 maxTime2To1 = 0;
+    float averageTime2To1 = 0.0f;
+
+    float minUSBTripMilliS = BIG_FLOAT;
+    float maxUSBTripMilliS = SMALL_FLOAT;
+    float averageUSBTripMilliS = 0.0f;
+    UInt32 countUSBTripTime = 0;
+
+    UInt32 measurementsCount = 0;
+    UInt32 measurements1to2 = 0;
+    UInt32 measurements2to1 = 0;
+
+    MeasurementResult* pCurr = Results.GetFirst();
+    UInt32 count = 0;
+    while(true)
+    {
+        count++;
+
+        if (!pCurr->TimedOutWaitingForTestStarted &&
+            !pCurr->TimedOutWaitingForColorDetected)
+        {
+            measurementsCount++;
+
+            if (measurementsCount > INITIAL_SAMPLES_TO_IGNORE)
+            {
+                if (pCurr->TargetColor == COLOR2)
+                {
+                    measurements1to2++;
+
+                    if (measurements1to2 <= DEFAULT_NUMBER_OF_SAMPLES)
+                    {
+                        UInt32 elapsed = pCurr->DeviceMeasuredElapsedMilliS;
+
+                        minTime1To2 = Alg::Min(elapsed, minTime1To2);
+                        maxTime1To2 = Alg::Max(elapsed, maxTime1To2);
+
+                        averageTime1To2 += (float) elapsed;
+                    }
+                }
+                else
+                {
+                    measurements2to1++;
+
+                    if (measurements2to1 <= DEFAULT_NUMBER_OF_SAMPLES)
+                    {
+                        UInt32 elapsed = pCurr->DeviceMeasuredElapsedMilliS;
+
+                        minTime2To1 = Alg::Min(elapsed, minTime2To1);
+                        maxTime2To1 = Alg::Max(elapsed, maxTime2To1);
+
+                        averageTime2To1 += (float) elapsed;
+                    }
+                }
+
+                float usbRountripElapsedMilliS = 0.001f * (float) (pCurr->TestStartedTicksMicroS - pCurr->StartTestTicksMicroS);
+                minUSBTripMilliS = Alg::Min(usbRountripElapsedMilliS, minUSBTripMilliS);
+                maxUSBTripMilliS = Alg::Max(usbRountripElapsedMilliS, maxUSBTripMilliS);
+                averageUSBTripMilliS += usbRountripElapsedMilliS;
+                countUSBTripTime++;
+            }
+        }
+
+        if (measurements1to2 >= DEFAULT_NUMBER_OF_SAMPLES &&
+            measurements2to1 >= DEFAULT_NUMBER_OF_SAMPLES)
+        {
+            break;
+        }
+
+        if (Results.IsLast(pCurr))
+        {
+            break;
+        }
+        pCurr = Results.GetNext(pCurr);
+    }
+
+    averageTime1To2 /= (float) DEFAULT_NUMBER_OF_SAMPLES;      
+    averageTime2To1 /= (float) DEFAULT_NUMBER_OF_SAMPLES;
+
+    averageUSBTripMilliS /= countUSBTripTime;
+    
+    float finalResult = 0.5f * (averageTime1To2 + averageTime2To1);
+    finalResult += averageUSBTripMilliS;
+
+    ResultsString.Clear();
+    ResultsString.AppendFormat("RESULT=%.1f (add half Tracker period) [b->w %d|%.1f|%d] [w->b %d|%.1f|%d] [usb rndtrp %.1f|%.1f|%.1f] [cnt %d] [tmouts %d]",  
+                finalResult, 
+                minTime1To2, averageTime1To2, maxTime1To2, 
+                minTime2To1, averageTime2To1, maxTime2To1,
+                minUSBTripMilliS, averageUSBTripMilliS, maxUSBTripMilliS,
+                DEFAULT_NUMBER_OF_SAMPLES*2, count - measurementsCount);
 }
 
-void LatencyTestUtil::TransitionToWaitingForChangeColorSignal()
+void LatencyTestUtil::updateForTimeouts()
 {
-    LatencyTestStartTest start(END_COLOR);
-    Device->SetStartTest(start, true);
-    ActiveTimerMillis = Timer::GetTicksMs() + TIMEOUT_WAITING_FOR_START_SIGNAL_MILLIS;
-    State = Scene_WaitingForChangeColorSignal;
+    if (!HaveOldTime)
+    {
+        HaveOldTime = true;
+        OldTime = Timer::GetTicksMs();
+        return;
+    }
+
+    UInt32 newTime = Timer::GetTicksMs();
+    UInt32 elapsedMilliS = newTime - OldTime;
+    if (newTime < OldTime)
+    {
+        elapsedMilliS = OldTime - newTime;
+        elapsedMilliS = UINT_MAX - elapsedMilliS;
+    }
+    OldTime = newTime;
+
+    elapsedMilliS = Alg::Min(elapsedMilliS, (UInt32) 100);   // Clamp at 100mS in case we're not being called very often.
+
+
+    if (ActiveTimerMilliS == 0)
+    {
+        return;
+    }
+
+    if (elapsedMilliS >= ActiveTimerMilliS)
+    {
+        ActiveTimerMilliS = 0;
+        handleMessage(Message(), LatencyTest_Timer);
+        return;
+    }
+
+    ActiveTimerMilliS -= elapsedMilliS;
 }
 
 } // namespace OVR
-

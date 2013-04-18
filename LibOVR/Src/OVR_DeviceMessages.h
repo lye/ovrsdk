@@ -47,8 +47,8 @@ enum MessageType
     // Latency Tester Messages
     Message_LatencyTestSamples          = OVR_MESSAGETYPE(LatencyTester, 0),
     Message_LatencyTestColorDetected    = OVR_MESSAGETYPE(LatencyTester, 1),
-    Message_LatencyTestChangeColor      = OVR_MESSAGETYPE(LatencyTester, 3),
-    Message_LatencyTestButton           = OVR_MESSAGETYPE(LatencyTester, 4),
+    Message_LatencyTestStarted          = OVR_MESSAGETYPE(LatencyTester, 2),
+    Message_LatencyTestButton           = OVR_MESSAGETYPE(LatencyTester, 3),
 
     // Emitted when LED is turned on/off.
     Message_LED                     = OVR_MESSAGETYPE(Sensor, 1)
@@ -146,11 +146,11 @@ public:
 };
 
 // Sent when a Latency Tester 'change color' event occurs.
-class MessageLatencyTestChangeColor : public Message
+class MessageLatencyTestStarted : public Message
 {
 public:
-    MessageLatencyTestChangeColor(DeviceBase* dev)
-        : Message(Message_LatencyTestChangeColor, dev)
+    MessageLatencyTestStarted(DeviceBase* dev)
+        : Message(Message_LatencyTestStarted, dev)
     {
     }
 

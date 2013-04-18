@@ -116,6 +116,13 @@ template<class T> struct SelfType { typedef T Type; };
 // ThreadCommand specializations for member functions with different number of
 // arguments and argument types.
 
+// Used to return nothing from a ThreadCommand, to avoid problems with 'void'.
+struct Void
+{
+    Void() {}
+    Void(int) {}
+};
+
 // ThreadCommand for member function with 0 arguments.
 template<class C, class R>
 class ThreadCommandMF0 : public ThreadCommand
@@ -125,23 +132,18 @@ class ThreadCommandMF0 : public ThreadCommand
     FnPtr   pFn;
     R*      pRet;
 
-    // Specialize execution call to avoid writing to 'void'.
-    template<class RT>
     void executeImpl() const
     {
         pRet ? (void)(*pRet = (pClass->*pFn)()) :
-                              (pClass->*pFn)();
+	           (void)(pClass->*pFn)();
     }
-    template<>
-    void executeImpl<void>() const
-    { (pClass->*pFn)(); }
 
 public:    
     ThreadCommandMF0(C* pclass, FnPtr fn, R* ret, bool needsWait)
         : ThreadCommand(sizeof(ThreadCommandMF0), needsWait),
           pClass(pclass), pFn(fn), pRet(ret) { }
 
-    virtual void           Execute() const { executeImpl<R>(); }
+    virtual void           Execute() const { executeImpl(); }
     virtual ThreadCommand* CopyConstruct(void* p) const
     { return Construct<ThreadCommandMF0>(p, *this); }
 };
@@ -157,23 +159,18 @@ class ThreadCommandMF1 : public ThreadCommand
     R*                           pRet;
     typename CleanType<A0>::Type AVal0;
 
-    // Specialize execution call to avoid writing to 'void'.
-    template<class RT>
     void executeImpl() const
     {
-        pRet ? (void)(*pRet = (pClass->*pFn)(AVal0)) :
-                              (pClass->*pFn)(AVal0);
+      pRet ? (void)(*pRet = (pClass->*pFn)(AVal0)) :
+	         (void)(pClass->*pFn)(AVal0);
     }
-    template<>
-    void executeImpl<void>() const
-    { (pClass->*pFn)(AVal0); }
 
 public:    
     ThreadCommandMF1(C* pclass, FnPtr fn, R* ret, A0 a0, bool needsWait)
         : ThreadCommand(sizeof(ThreadCommandMF1), needsWait),
           pClass(pclass), pFn(fn), pRet(ret), AVal0(a0) { }
 
-    virtual void           Execute() const { executeImpl<R>(); }
+    virtual void           Execute() const { executeImpl(); }
     virtual ThreadCommand* CopyConstruct(void* p) const
     { return Construct<ThreadCommandMF1>(p, *this); }
 };
@@ -189,23 +186,18 @@ class ThreadCommandMF2 : public ThreadCommand
     typename CleanType<A0>::Type  AVal0;
     typename CleanType<A1>::Type  AVal1;
 
-    // Specialize execution call to avoid writing to 'void'.
-    template<class RT>
     void executeImpl() const
     {
         pRet ? (void)(*pRet = (pClass->*pFn)(AVal0, AVal1)) :
-                              (pClass->*pFn)(AVal0, AVal1);
+	           (void)(pClass->*pFn)(AVal0, AVal1);
     }
-    template<>
-    void executeImpl<void>() const
-    { (pClass->*pFn)(AVal0, AVal1); }
 
 public:    
     ThreadCommandMF2(C* pclass, FnPtr fn, R* ret, A0 a0, A1 a1, bool needsWait)
         : ThreadCommand(sizeof(ThreadCommandMF2), needsWait),
           pClass(pclass), pFn(fn), pRet(ret), AVal0(a0), AVal1(a1) { }
     
-    virtual void           Execute() const { executeImpl<R>(); }
+    virtual void           Execute() const { executeImpl(); }
     virtual ThreadCommand* CopyConstruct(void* p) const 
     { return Construct<ThreadCommandMF2>(p, *this); }
 };

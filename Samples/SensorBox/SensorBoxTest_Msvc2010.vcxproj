@@ -55,7 +55,7 @@
       <WarningLevel>Level4</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>OVR_BUILD_DEBUG;WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../LibOVR/Include;../../LibOVR/Src;$(DXSDK_DIR)/Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../LibOVR/Include;../../LibOVR/Src;../../3rdParty/glext;$(DXSDK_DIR)/Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <StringPooling>
@@ -78,7 +78,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <AdditionalIncludeDirectories>../../LibOVR/Include;../../LibOVR/Src;$(DXSDK_DIR)/Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../LibOVR/Include;../../LibOVR/Src;../../3rdParty/glext;$(DXSDK_DIR)/Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DebugInformationFormat>OldStyle</DebugInformationFormat>
@@ -94,29 +94,27 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\CommonSrc\Platform\Platform.cpp" />
-    <ClCompile Include="..\CommonSrc\Platform\Platform_Win32.cpp" />
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer.cpp" />
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D10.cpp" />
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D11.cpp" />
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D1x.cpp">
+    <ClCompile Include="..\CommonSrc\Platform\Win32_Platform.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_Device.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_D3D10_Device.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_D3D11_Device.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_D3D1X_Device.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_GL.cpp" />
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_Stereo.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_Stereo.cpp" />
     <ClCompile Include="SensorBoxTest.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\CommonSrc\Platform\Platform.h" />
     <ClInclude Include="..\CommonSrc\Platform\Platform_Default.h" />
-    <ClInclude Include="..\CommonSrc\Platform\Platform_Win32.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Font.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D10.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D11.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D1x.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_GL.h" />
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_Stereo.h" />
+    <ClInclude Include="..\CommonSrc\Platform\Win32_Platform.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render_Font.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render_D3D10_Device.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render_D3D11_Device.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render_D3D1X_Device.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render_Stereo.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

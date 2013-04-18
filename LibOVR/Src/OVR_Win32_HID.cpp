@@ -109,7 +109,7 @@ bool Win32HIDInterface::Enumerate(HIDEnumerateVisitor* enumVisitor)
             InitUsageAndIOLength(hidDev, &devDesc))
         {
             InitStrings(hidDev, &devDesc);
-            enumVisitor->Visit(devDesc);
+            enumVisitor->Visit(hidDev, devDesc);
         }
         
         ::CloseHandle(hidDev);

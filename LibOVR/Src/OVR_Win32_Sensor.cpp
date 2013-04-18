@@ -14,6 +14,8 @@ otherwise accompanies this software in either electronic or hard copy form.
 *************************************************************************************/
 
 #include "OVR_Win32_Sensor.h"
+// HMDDeviceDesc can be created/updated through Sensor carrying DisplayInfo.
+#include "OVR_Win32_HMDDevice.h"
 
 #include "Kernel/OVR_Timer.h"
 
@@ -42,6 +44,23 @@ static SInt16 DecodeSInt16(const UByte* buffer)
 {
     return (SInt16(buffer[1]) << 8) | SInt16(buffer[0]);
 }
+
+static UInt32 DecodeUInt32(const UByte* buffer)
+{    
+    return (buffer[0]) | UInt32(buffer[1] << 8) | UInt32(buffer[2] << 16) | UInt32(buffer[3] << 24);    
+}
+
+static float DecodeFloat(const UByte* buffer)
+{
+    union {
+        UInt32 U;
+        float  F;
+    };
+
+    U = DecodeUInt32(buffer);
+    return F;
+}
+
 
 
 static void UnpackSensor(const UByte* buffer, SInt32* x, SInt32* y, SInt32* z)
@@ -328,6 +347,73 @@ struct SensorKeepAlive
 
 
 
+// DisplayInfo obtained from sensor; these values are used to report distortion
+// settings and other coefficients.
+// Older SensorDisplayInfo will have all zeros, causing the library to apply hard-coded defaults.
+// Currently, only resolutions and sizes are used.
+
+struct SensorDisplayInfo
+{
+    enum  { PacketSize = 56 };
+    UByte   Buffer[PacketSize];
+
+    enum
+    {
+        Mask_BaseFmt    = 0x0f,
+        Mask_OptionFmts = 0xf0,
+        Base_None       = 0,
+        Base_ScreenOnly = 1,
+        Base_Distortion = 2,
+    };
+
+    UInt16  CommandId;
+    UByte   DistortionType;    
+    UInt16  HResolution, VResolution;
+    float   HScreenSize, VScreenSize;
+    float   VCenter;
+    float   LensSeparation;
+    float   EyeToScreenDistance[2];
+    float   DistortionK[6];
+
+    SensorDisplayInfo() : CommandId(0)
+    {
+        memset(Buffer, 0, PacketSize);
+        Buffer[0] = 9;
+    }
+    /*
+    void Pack()
+    {
+        Buffer[0] = 9;
+        Buffer[1] = UByte(CommandId & 0xFF);
+        Buffer[2] = UByte(CommandId >> 8);
+        Buffer[3] = DistortionType;               
+    } */
+
+    void Unpack()
+    {
+        CommandId               = Buffer[1] | (UInt16(Buffer[2]) << 8);
+        DistortionType          = Buffer[3];
+        HResolution             = DecodeUInt16(Buffer+4);
+        VResolution             = DecodeUInt16(Buffer+6);
+        HScreenSize             = DecodeUInt32(Buffer+8) *  (1/1000000.f);
+        VScreenSize             = DecodeUInt32(Buffer+12) * (1/1000000.f);
+        VCenter                 = DecodeUInt32(Buffer+16) * (1/1000000.f);
+        LensSeparation          = DecodeUInt32(Buffer+20) * (1/1000000.f);
+        EyeToScreenDistance[0]  = DecodeUInt32(Buffer+24) * (1/1000000.f);
+        EyeToScreenDistance[1]  = DecodeUInt32(Buffer+28) * (1/1000000.f);
+        DistortionK[0]          = DecodeFloat(Buffer+32);
+        DistortionK[1]          = DecodeFloat(Buffer+36);
+        DistortionK[2]          = DecodeFloat(Buffer+40);
+        DistortionK[3]          = DecodeFloat(Buffer+44);
+        DistortionK[4]          = DecodeFloat(Buffer+48);
+        DistortionK[5]          = DecodeFloat(Buffer+52);
+    }
+
+};
+
+
+
+
 
 //-------------------------------------------------------------------------------------
 // ***** SensorDeviceFactory
@@ -355,12 +441,42 @@ void SensorDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
                    ((vendorId == Sensor_OldVendorId) && (productId == Sensor_OldProductId));
         }
 
-        virtual void Visit(const HIDDeviceDesc& desc)
+        virtual void Visit(HANDLE hidDev, const HIDDeviceDesc& desc)
         {
             SensorDeviceCreateDesc createDesc(pFactory, desc);
             ExternalVisitor.Visit(createDesc);
+
+            // Check if the sensor returns DisplayInfo. If so, try to use it to override potentially
+            // mismatching monitor information (in case wrong EDID is reported by splitter),
+            // or to create a new "virtualized" HMD Device.
+            DeviceManager* manager = (Win32::DeviceManager*)pFactory->GetManagerImpl();
+            Win32HIDInterface& hid = manager->HIDInterface;
             
-            //  LogText("FSK Device found. Path=\"%s\"\n", path.ToCStr());
+            SensorDisplayInfo displayInfo;
+            if (hid.HidD_GetFeature(hidDev, displayInfo.Buffer, SensorDisplayInfo::PacketSize))            
+                displayInfo.Unpack();
+
+            /*
+            displayInfo.HResolution = 1280;
+            displayInfo.VResolution = 800;
+            displayInfo.HScreenSize = 0.14976f;
+            displayInfo.VScreenSize = 0.0936f;
+            */
+
+            // If we got display info, try to match / create HMDDevice as well
+            // so that sensor settings give preference.
+            if (displayInfo.DistortionType & SensorDisplayInfo::Mask_BaseFmt)
+            {
+                HMDDeviceCreateDesc hmdCreateDesc(&HMDDeviceFactory::Instance, String(), String());
+                hmdCreateDesc.SetScreenParameters(0, 0,
+                                                  displayInfo.HResolution, displayInfo.VResolution,
+                                                  displayInfo.HScreenSize, displayInfo.HScreenSize);
+
+                if ((displayInfo.DistortionType & SensorDisplayInfo::Mask_BaseFmt) == 2)
+                    hmdCreateDesc.SetDistortion(displayInfo.DistortionK);
+
+                ExternalVisitor.Visit(hmdCreateDesc);
+            }                       
         }
     };
 
@@ -769,7 +885,7 @@ SensorDevice::CoordinateFrame SensorDevice::GetCoordinateFrame() const
     return Coordinates;
 }
 
-void SensorDevice::setCoordinateFrame(CoordinateFrame coordframe)
+Void SensorDevice::setCoordinateFrame(CoordinateFrame coordframe)
 {
     DeviceManager*     manager = getManagerImpl();
     Win32HIDInterface& hid     = manager->HIDInterface;
@@ -797,6 +913,7 @@ void SensorDevice::setCoordinateFrame(CoordinateFrame coordframe)
     {
         HWCoordinates = Coord_HMD;
     }
+    return 0;
 }
 
 

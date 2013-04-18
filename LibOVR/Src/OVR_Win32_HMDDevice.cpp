@@ -16,11 +16,121 @@ otherwise accompanies this software in either electronic or hard copy form.
 #include "OVR_Win32_HMDDevice.h"
 
 // Needed to tag sensor as having HMD coordinates.
-#include "OVR_Win32_FSRKSensor.h"
 #include "OVR_Win32_Sensor.h"
+#include <tchar.h>
 
 namespace OVR { namespace Win32 {
 
+//-------------------------------------------------------------------------------------
+
+HMDDeviceCreateDesc::HMDDeviceCreateDesc(DeviceFactory* factory, 
+                                         const String& deviceId, const String& displayDeviceName)
+        : DeviceCreateDesc(factory, Device_HMD),
+          DeviceId(deviceId), DisplayDeviceName(displayDeviceName),
+          DesktopX(0), DesktopY(0), Contents(0),
+          HResolution(0), VResolution(0), HScreenSize(0), VScreenSize(0)
+{
+}
+HMDDeviceCreateDesc::HMDDeviceCreateDesc(const HMDDeviceCreateDesc& other)
+        : DeviceCreateDesc(other.pFactory, Device_HMD),
+          DeviceId(other.DeviceId), DisplayDeviceName(other.DisplayDeviceName),
+          DesktopX(other.DesktopX), DesktopY(other.DesktopY), Contents(other.Contents),
+          HResolution(other.HResolution), VResolution(other.VResolution),
+          HScreenSize(other.HScreenSize), VScreenSize(other.VScreenSize)
+{
+}
+
+HMDDeviceCreateDesc::MatchResult HMDDeviceCreateDesc::MatchDevice(const DeviceCreateDesc& other,
+                                                                  DeviceCreateDesc** pcandidate) const
+{
+    if ((other.Type != Device_HMD) || (other.pFactory != pFactory))
+        return Match_None;
+
+    // There are several reasons we can come in here:
+    //   a) Matching this HMD Monitor created desc to OTHER HMD Monitor desc
+    //          - Require exact device DeviceId/DeviceName match
+    //   b) Matching SensorDisplayInfo created desc to OTHER HMD Monitor desc
+    //          - This DeviceId is empty; becomes candidate
+    //   c) Matching this HMD Monitor created desc to SensorDisplayInfo desc
+    //          - This other.DeviceId is empty; becomes candidate
+
+    const HMDDeviceCreateDesc& s2 = (const HMDDeviceCreateDesc&) other;
+
+    if ((DeviceId == s2.DeviceId) &&
+        (DisplayDeviceName == s2.DisplayDeviceName))
+    {
+        // Non-null DeviceId may match while size is different if screen size was overwritten
+        // by SensorDisplayInfo in prior iteration.
+        if (!DeviceId.IsEmpty() ||
+             ((HScreenSize == s2.HScreenSize) &&
+              (VScreenSize == s2.VScreenSize)) )
+        {            
+            *pcandidate = 0;
+            return Match_Found;
+        }
+    }
+
+
+    // DisplayInfo takes precedence, although we try to match it first.
+    if ((HResolution == s2.HResolution) &&
+        (VResolution == s2.VResolution) &&
+        (HScreenSize == s2.HScreenSize) &&
+        (VScreenSize == s2.VScreenSize))
+    {
+        *pcandidate = 0;
+        return Match_Found;
+    }    
+    
+    // SensorDisplayInfo may override resolution settings, so store as candidiate.
+    if (s2.DeviceId.IsEmpty())
+    {        
+        *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);        
+        return Match_Candidate;
+    }
+    // OTHER HMD Monitor desc may initialize DeviceName/Id
+    else if (DeviceId.IsEmpty())
+    {
+        *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);        
+        return Match_Candidate;
+    }
+    
+    return Match_None;
+}
+
+
+bool HMDDeviceCreateDesc::UpdateMatchedCandidate(const DeviceCreateDesc& other)
+{
+    // This candidate was the the "best fit" to apply sensor DisplayInfo to.
+    OVR_ASSERT(other.Type == Device_HMD);
+    
+    const HMDDeviceCreateDesc& s2 = (const HMDDeviceCreateDesc&) other;
+
+    // Force screen size on resolution from SensorDisplayInfo.
+    // We do this because USB detection is more reliable as compared to HDMI EDID,
+    // which may be corrupted by splitter reporting wrong monitor 
+    if (s2.DeviceId.IsEmpty())
+    {
+        HScreenSize = s2.HScreenSize;
+        VScreenSize = s2.VScreenSize;
+        Contents |= Contents_Screen;
+
+        if (s2.Contents & HMDDeviceCreateDesc::Contents_Distortion)
+        {
+            memcpy(DistortionK, s2.DistortionK, sizeof(float)*4);
+            Contents |= Contents_Distortion;
+        }
+    }
+    else if (DeviceId.IsEmpty())
+    {
+        DeviceId          = s2.DeviceId;
+        DisplayDeviceName = s2.DisplayDeviceName;
+    }
+
+    return true;
+}
+
+    
+//-------------------------------------------------------------------------------------
 
 
 const wchar_t* FormatDisplayStateFlags(wchar_t* buff, int length, DWORD flags)
@@ -42,6 +152,27 @@ const wchar_t* FormatDisplayStateFlags(wchar_t* buff, int length, DWORD flags)
 }
 
 
+//-------------------------------------------------------------------------------------
+// Callback for monitor enumeration to store all the monitor handles
+
+// Used to capture all the active monitor handles
+struct MonitorSet
+{
+    enum { MaxMonitors = 8 };
+    HMONITOR Monitors[MaxMonitors];
+    int      MonitorCount;
+};
+
+BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC, LPRECT, LPARAM dwData)
+{
+    MonitorSet* monitorSet = (MonitorSet*)dwData;
+    if (monitorSet->MonitorCount > MonitorSet::MaxMonitors)
+        return FALSE;
+
+    monitorSet->Monitors[monitorSet->MonitorCount] = hMonitor;
+    monitorSet->MonitorCount++;
+    return TRUE;
+};
 
 //-------------------------------------------------------------------------------------
 // ***** HMDDeviceFactory
@@ -50,6 +181,11 @@ HMDDeviceFactory HMDDeviceFactory::Instance;
 
 void HMDDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
 {
+    MonitorSet monitors;
+    monitors.MonitorCount = 0;
+    // Get all the monitor handles 
+    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)&monitors);
+    
    // DeviceManager* manager = getManager();
     DISPLAY_DEVICE dd, ddm;
     UINT           i, j;    
@@ -73,6 +209,15 @@ void HMDDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
             (ZeroMemory(&ddm, sizeof(ddm)), ddm.cb = sizeof(ddm),
             EnumDisplayDevices(dd.DeviceName, j, &ddm, 0)) != 0;  j++)
         {
+            /*
+            wchar_t mbuff[500];
+            swprintf_s(mbuff, 500, L"MON: \"%s\" \"%s\" 0x%08x=%s\n     \"%s\" \"%s\"\n",
+                ddm.DeviceName, ddm.DeviceString,
+                ddm.StateFlags, FormatDisplayStateFlags(flagsBuff, 200, ddm.StateFlags),
+                ddm.DeviceID, ddm.DeviceKey);
+            ::OutputDebugString(mbuff);
+            */
+
             // Our monitor hardware has string "RTD2205" in it
             // Nate's device "CVT0003"
             if (wcsstr(ddm.DeviceID, L"RTD2205") || 
@@ -83,16 +228,41 @@ void HMDDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
                 String deviceId(ddm.DeviceID);
                 String displayDeviceName(ddm.DeviceName);
 
+                // The default monitor coordinates
+                int mx      = 0;
+                int my      = 0;
+                int mwidth  = 1280;
+                int mheight = 800;
+
+                // Find the matching MONITORINFOEX for this device so we can get the 
+                // screen coordinates
+                MONITORINFOEX info;
+                for (int m=0; m < monitors.MonitorCount; m++)
+                {
+                    info.cbSize = sizeof(MONITORINFOEX);
+                    GetMonitorInfo(monitors.Monitors[m], &info);
+                    if (_tcsstr(ddm.DeviceName, info.szDevice) == ddm.DeviceName)
+                    {   // If the device name starts with the monitor name
+                        // then we found the matching DISPLAY_DEVICE and MONITORINFO
+                        // so we can gather the monitor coordinates
+                        mx = info.rcMonitor.left;
+                        my = info.rcMonitor.top;
+                        //mwidth = info.rcMonitor.right - info.rcMonitor.left;
+                        //mheight = info.rcMonitor.bottom - info.rcMonitor.top;
+                        break;
+                    }
+                }
+
                 HMDDeviceCreateDesc hmdCreateDesc(this, deviceId, displayDeviceName);
 
                 if (hmdCreateDesc.IsSLA1())
                 {
                     // Physical dimension of SLA screen.
-                    hmdCreateDesc.SetScreenParameters(1280, 800, 0.14976f, 0.0936f);
+                    hmdCreateDesc.SetScreenParameters(mx, my, mwidth, mheight, 0.14976f, 0.0936f);
                 }
                 else
                 {
-                    hmdCreateDesc.SetScreenParameters(1280, 800, 0.12096f, 0.0756f);
+                    hmdCreateDesc.SetScreenParameters(mx, my, mwidth, mheight, 0.12096f, 0.0756f);
                 }
 
                 OVR_DEBUG_LOG_TEXT(("DeviceManager - HMD Found %s - %s\n",
@@ -104,14 +274,7 @@ void HMDDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
                 break;
             }
 
-          /*  
-            wchar_t mbuff[500];
-            swprintf_s(mbuff, 500, L"MON: \"%s\" \"%s\" 0x%08x=%s\n     \"%s\" \"%s\"\n",
-                ddm.DeviceName, ddm.DeviceString,
-                ddm.StateFlags, FormatDisplayStateFlags(flagsBuff, 200, ddm.StateFlags),
-                ddm.DeviceID, ddm.DeviceKey);
-            ::OutputDebugString(mbuff);
-            */
+          
             
         }
     }
@@ -147,6 +310,8 @@ bool HMDDeviceCreateDesc::GetDeviceInfo(DeviceInfo* info) const
     {
         HMDInfo* hmdInfo = static_cast<HMDInfo*>(info);
 
+        hmdInfo->DesktopX               = DesktopX;
+        hmdInfo->DesktopY               = DesktopY;
         hmdInfo->HResolution            = HResolution;
         hmdInfo->VResolution            = VResolution;
         hmdInfo->HScreenSize            = HScreenSize;
@@ -154,21 +319,28 @@ bool HMDDeviceCreateDesc::GetDeviceInfo(DeviceInfo* info) const
         hmdInfo->VScreenCenter          = VScreenSize * 0.5f;
         hmdInfo->InterpupillaryDistance = 0.064f;  // Default IPD; should be configurable.
         hmdInfo->LensSeparationDistance = 0.064f;
-                
-        if (IsSLA1())
+
+        if (Contents & Contents_Distortion)
         {
-            // 7" screen.
-            hmdInfo->DistortionK0        = 1.0f;
-            hmdInfo->DistortionK1        = 0.22f;
-            hmdInfo->DistortionK2        = 0.24f;
-            hmdInfo->EyeToScreenDistance = 0.041f;
+            memcpy(hmdInfo->DistortionK, DistortionK, sizeof(float)*4);
         }
         else
         {
-            hmdInfo->DistortionK0        = 1.0f;
-            hmdInfo->DistortionK1        = 0.18f;
-            hmdInfo->DistortionK2        = 0.115f;
-            hmdInfo->EyeToScreenDistance = 0.0387f;
+            if (IsSLA1())
+            {
+                // 7" screen.
+                hmdInfo->DistortionK[0]      = 1.0f;
+                hmdInfo->DistortionK[1]      = 0.22f;
+                hmdInfo->DistortionK[2]      = 0.24f;
+                hmdInfo->EyeToScreenDistance = 0.041f;
+            }
+            else
+            {
+                hmdInfo->DistortionK[0]      = 1.0f;
+                hmdInfo->DistortionK[1]      = 0.18f;
+                hmdInfo->DistortionK[2]      = 0.115f;
+                hmdInfo->EyeToScreenDistance = 0.0387f;
+            }
         }
 
         OVR_strcpy(hmdInfo->DisplayDeviceName, sizeof(hmdInfo->DisplayDeviceName),

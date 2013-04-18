@@ -28,6 +28,7 @@ namespace OVR {
 
 class SensorDevice;
 class DeviceCommon;
+class DeviceManager;
 
 
 // MessageHandler is a base class from which users derive to receive messages,
@@ -313,29 +314,33 @@ public:
     // Where uvInput is the UV vector from the center of distortion in direction
     // of the mapped pixel, uvLength is the magnitude of that vector, and uvResult
     // the corresponding location after distortion.
-    float     DistortionK0;
-    float     DistortionK1;
-    float     DistortionK2;
+    float     DistortionK[4];
 
+    // Desktop coordinate position of the screen (can be negative; may not be present on all platforms)
+    int       DesktopX, DesktopY;
     
     // Windows:
     // "\\\\.\\DISPLAY3", etc. Can be used in EnumDisplaySettings/CreateDC.
     char      DisplayDeviceName[32];
+    
+    // MacOS:
+    long      DisplayId;
 
 
     HMDInfo()
-        : DeviceInfo(Device_HMD),
+        : DeviceInfo(Device_HMD),          
           HResolution(0), VResolution(0), HScreenSize(0), VScreenSize(0),
           VScreenCenter(0), EyeToScreenDistance(0),
           LensSeparationDistance(0), InterpupillaryDistance(0),
-          DistortionK0(1), DistortionK1(0), DistortionK2(0)
+          DesktopX(0), DesktopY(0), DisplayId(0)
     {
         DisplayDeviceName[0] = 0;
+        memset(DistortionK, 0, sizeof(DistortionK));
     }
 
     // Operator = copies local fields only (base class must be correct already)
     void operator = (const HMDInfo& src)
-    {
+    {        
         HResolution             = src.HResolution;
         VResolution             = src.VResolution;
         HScreenSize             = src.HScreenSize;
@@ -344,10 +349,14 @@ public:
         EyeToScreenDistance     = src.EyeToScreenDistance;
         LensSeparationDistance  = src.LensSeparationDistance;
         InterpupillaryDistance  = src.InterpupillaryDistance;
-        DistortionK0            = DistortionK0;
-        DistortionK1            = DistortionK1;
-        DistortionK2            = DistortionK2;
+        DistortionK[0]          = src.DistortionK[0];
+        DistortionK[1]          = src.DistortionK[1];
+        DistortionK[2]          = src.DistortionK[2];
+        DistortionK[3]          = src.DistortionK[3];
+        DesktopX                = src.DesktopX;
+        DesktopY                = src.DesktopY;
         memcpy(DisplayDeviceName, src.DisplayDeviceName, sizeof(DisplayDeviceName));
+        DisplayId               = src.DisplayId;
     }
 };
 
@@ -499,7 +508,7 @@ public:
 // LatencyTestConfiguration specifies configuration information for the Oculus Latency Tester device.
 struct LatencyTestConfiguration
 {
-    LatencyTestConfiguration(ColorRGB threshold, bool sendSamples = false)
+    LatencyTestConfiguration(const ColorRGB& threshold, bool sendSamples = false)
         : Threshold(threshold), SendSamples(sendSamples) 
     {
     }
@@ -515,7 +524,7 @@ struct LatencyTestConfiguration
 // LatencyTestCalibrate specifies colors used for Latency Tester calibration.
 struct LatencyTestCalibrate
 {
-    LatencyTestCalibrate(ColorRGB& value)
+    LatencyTestCalibrate(const ColorRGB& value)
         : Value(value)
     {
     }
@@ -539,6 +548,21 @@ struct LatencyTestStartTest
 };
 
 //-------------------------------------------------------------------------------------
+// ***** LatencyTestDisplay
+// LatencyTestDisplay sets the mode and contents of the Latency Tester LED display.
+// See the 'Latency Tester Specification' document for more details.
+struct LatencyTestDisplay
+{
+    LatencyTestDisplay(UByte mode, UInt32 value)
+        : Mode(mode), Value(value)
+    {
+    }
+
+    UByte       Mode;       // The display mode that we wish to select.
+    UInt32      Value;      // The value to display.
+};
+
+//-------------------------------------------------------------------------------------
 // ***** LatencyTestDevice
 // LatencyTestDevice represents the Oculus Latency Tester device used to test round trip latency.
 //
@@ -556,6 +580,7 @@ public:
     virtual bool       SetConfiguration(const LatencyTestConfiguration& configuration, bool waitFlag = false) = 0;
     virtual bool       SetCalibrate(const LatencyTestCalibrate& calibrate, bool waitFlag = false) = 0;
     virtual bool       SetStartTest(const LatencyTestStartTest& start, bool waitFlag = false) = 0;
+    virtual bool       SetDisplay(const LatencyTestDisplay& display, bool waitFlag = false) = 0;
 };
 
 } // namespace OVR

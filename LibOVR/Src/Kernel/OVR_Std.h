@@ -319,6 +319,19 @@ inline UPInt OVR_CDECL OVR_vsprintf(char *dest, UPInt destsize, const char * for
     return ret;
 }
 
+// Returns the number of characters in the formatted string.
+inline UPInt OVR_CDECL OVR_vscprintf(const char * format, va_list argList)
+{
+    UPInt ret;
+#if defined(OVR_CC_MSVC)
+    ret = (UPInt) _vscprintf(format, argList);
+#else    
+    ret = (UPInt) vsnprintf(NULL, 0, format, argList);
+#endif
+    return ret;       
+}
+
+
 wchar_t* OVR_CDECL OVR_wcscpy(wchar_t* dest, UPInt destsize, const wchar_t* src);
 wchar_t* OVR_CDECL OVR_wcsncpy(wchar_t* dest, UPInt destsize, const wchar_t* src, UPInt count);
 wchar_t* OVR_CDECL OVR_wcscat(wchar_t* dest, UPInt destsize, const wchar_t* src);

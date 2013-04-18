@@ -49,7 +49,7 @@ enum LatencyTestMessageType
     LatencyTestMessage_None                 = 0,
     LatencyTestMessage_Samples              = 1,
     LatencyTestMessage_ColorDetected        = 2,
-    LatencyTestMessage_ChangeColor          = 3,
+    LatencyTestMessage_TestStarted          = 3,
     LatencyTestMessage_Button               = 4,
     LatencyTestMessage_Unknown              = 0x100,
     LatencyTestMessage_SizeError            = 0x101,
@@ -169,7 +169,7 @@ bool DecodeLatencyTestColorDetectedMessage(LatencyTestColorDetectedMessage* mess
     return (message->Type < LatencyTestMessage_Unknown) && (message->Type != LatencyTestMessage_None);
 }
 
-struct LatencyTestChangeColor
+struct LatencyTestStarted
 {
     UInt16	CommandID;
     UInt16	Timestamp;
@@ -184,19 +184,19 @@ struct LatencyTestChangeColor
         Timestamp = DecodeUInt16(buffer + 3);
         memcpy(TargetValue, buffer + 5, 3);
 
-        return LatencyTestMessage_ChangeColor;
+        return LatencyTestMessage_TestStarted;
     }
 };
 
-struct LatencyTestChangeColorMessage
+struct LatencyTestStartedMessage
 {
     LatencyTestMessageType  Type;
-    LatencyTestChangeColor  ChangeColor;
+    LatencyTestStarted      TestStarted;
 };
 
-bool DecodeLatencyTestChangeColorMessage(LatencyTestChangeColorMessage* message, UByte* buffer, int size)
+bool DecodeLatencyTestStartedMessage(LatencyTestStartedMessage* message, UByte* buffer, int size)
 {
-    memset(message, 0, sizeof(LatencyTestChangeColorMessage));
+    memset(message, 0, sizeof(LatencyTestStartedMessage));
 
     if (size < 8)
     {
@@ -206,8 +206,8 @@ bool DecodeLatencyTestChangeColorMessage(LatencyTestChangeColorMessage* message,
 
     switch (buffer[0])
     {
-    case LatencyTestMessage_ChangeColor:
-        message->Type = message->ChangeColor.Decode(buffer, size);
+    case LatencyTestMessage_TestStarted:
+        message->Type = message->TestStarted.Decode(buffer, size);
         break;
 
     default:
@@ -359,6 +359,39 @@ struct LatencyTestStartTest
     }
 };
 
+struct LatencyTestDisplay
+{
+    enum  { PacketSize = 6 };
+    UByte   Buffer[PacketSize];
+
+    OVR::LatencyTestDisplay  Display;
+
+    LatencyTestDisplay(const OVR::LatencyTestDisplay& display)
+        : Display(display)
+    {
+        Pack();
+    }
+
+    void Pack()
+    {
+        Buffer[0] = 9;
+        Buffer[1] = Display.Mode;
+        Buffer[2] = UByte(Display.Value & 0xFF);
+        Buffer[3] = UByte((Display.Value >> 8) & 0xFF);
+        Buffer[4] = UByte((Display.Value >> 16) & 0xFF);
+        Buffer[5] = UByte((Display.Value >> 24) & 0xFF);
+    }
+
+    void Unpack()
+    {
+        Display.Mode = Buffer[1];
+        Display.Value = UInt32(Buffer[2]) |
+                        (UInt32(Buffer[3]) << 8) |
+                        (UInt32(Buffer[4]) << 16) |
+                        (UInt32(Buffer[5]) << 24);
+    }
+};
+
 //-------------------------------------------------------------------------------------
 // ***** LatencyTestDeviceFactory
 
@@ -383,7 +416,7 @@ void LatencyTestDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
             return ((vendorId == LatencyTester_VendorId) && (productId == LatencyTester_ProductId));                
         }
 
-        virtual void Visit(const HIDDeviceDesc& desc)
+        virtual void Visit(HANDLE, const HIDDeviceDesc& desc)
         {
             LatencyTestDeviceCreateDesc createDesc(pFactory, desc);
             ExternalVisitor.Visit(createDesc);
@@ -609,11 +642,11 @@ bool LatencyTestDevice::processReadResult()
 
         if (!processed)
         {
-            LatencyTestChangeColorMessage message; 
-            if (DecodeLatencyTestChangeColorMessage(&message, ReadBuffer, bytesRead))     
+            LatencyTestStartedMessage message;
+            if (DecodeLatencyTestStartedMessage(&message, ReadBuffer, bytesRead))     
             {
                 processed = true;
-                onLatencyTestChangeColorMessage(&message);
+                onLatencyTestStartedMessage(&message);
             }
         }
 
@@ -814,6 +847,37 @@ bool LatencyTestDevice::setStartTest(const OVR::LatencyTestStartTest& start)
     return false;
 }
 
+bool LatencyTestDevice::SetDisplay(const OVR::LatencyTestDisplay& display, bool waitFlag)
+{
+    bool                 result = 0;
+    ThreadCommandQueue * threadQueue = getManagerImpl()->GetThreadQueue();
+
+    if (!waitFlag)
+        return threadQueue->PushCall(this, &LatencyTestDevice::setDisplay, display);
+
+    if (!threadQueue->PushCallAndWaitResult(this, &LatencyTestDevice::setDisplay,
+        &result, display))
+        return false;
+
+    return result;
+}
+
+bool LatencyTestDevice::setDisplay(const OVR::LatencyTestDisplay& display)
+{
+    if (!ReadRequested)
+        return false;
+
+    LatencyTestDisplay ltd(display);
+    DeviceManager*   manager = getManagerImpl();
+    if (manager->HIDInterface.HidD_SetFeature(hDev, (void*)ltd.Buffer,
+        LatencyTestDisplay::PacketSize))
+    {
+        return true;
+    }
+
+    return false;
+}
+
 void LatencyTestDevice::onLatencyTestSamplesMessage(LatencyTestSamplesMessage* message)
 {
     if (message->Type != LatencyTestMessage_Samples)
@@ -857,22 +921,22 @@ void LatencyTestDevice::onLatencyTestColorDetectedMessage(LatencyTestColorDetect
     }
 }
 
-void LatencyTestDevice::onLatencyTestChangeColorMessage(LatencyTestChangeColorMessage* message)
+void LatencyTestDevice::onLatencyTestStartedMessage(LatencyTestStartedMessage* message)
 {
-    if (message->Type != LatencyTestMessage_ChangeColor)
+    if (message->Type != LatencyTestMessage_TestStarted)
         return;
 
-    LatencyTestChangeColor& cc = message->ChangeColor;
+    LatencyTestStarted& ts = message->TestStarted;
 
     // Call OnMessage() within a lock to avoid conflicts with handlers.
     Lock::Locker scopeLock(HandlerRef.GetLock());
 
     if (HandlerRef.GetHandler())
     {
-        MessageLatencyTestChangeColor change(this);
-        change.TargetValue = ColorRGB(cc.TargetValue[0], cc.TargetValue[1], cc.TargetValue[2]);
+        MessageLatencyTestStarted started(this);
+        started.TargetValue = ColorRGB(ts.TargetValue[0], ts.TargetValue[1], ts.TargetValue[2]);
 
-        HandlerRef.GetHandler()->OnMessage(change);
+        HandlerRef.GetHandler()->OnMessage(started);
     }
 }
 

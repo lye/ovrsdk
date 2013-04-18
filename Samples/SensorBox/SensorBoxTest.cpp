@@ -17,7 +17,7 @@ otherwise accompanies this software in either electronic or hard copy form.
 #include "Kernel/OVR_String.h"
 
 #include "../CommonSrc/Platform/Platform_Default.h"
-#include "../CommonSrc/Renderer/Renderer.h"
+#include "../CommonSrc/Render/Render_Device.h"
 
 using namespace OVR;
 using namespace OVR::Platform;
@@ -50,7 +50,7 @@ enum ViewType
 
 class InputTestApp : public Application
 {
-    Renderer*       pRender;
+    RenderDevice*      pRender;
 
     Ptr<DeviceManager> pManager;
     Ptr<HMDDevice>     pHMD;
@@ -160,14 +160,10 @@ int InputTestApp::OnStartup(int argc, const char** argv)
     pManager = *DeviceManager::Create();
     
     // This initialization logic supports running two sensors at the same time.
-    // If both Oculus and FSRK sensors are plugged in together, pSensor will 
-    // always be Oculus (main sensor controlling the box), while FSRK will be
-    // assigned to pSensor2.    
    
     DeviceEnumerator<SensorDevice> isensor = pManager->EnumerateDevices<SensorDevice>();
     DeviceEnumerator<SensorDevice> oculusSensor;
     DeviceEnumerator<SensorDevice> oculusSensor2;
-    DeviceEnumerator<SensorDevice> fsrkSensor;
     
     while(isensor)
     {
@@ -181,10 +177,6 @@ int InputTestApp::OnStartup(int argc, const char** argv)
                 else if (!oculusSensor2)
                     oculusSensor2 = isensor;
             }
-            else if (strstr(di.ProductName, "Freespace") && !fsrkSensor)
-            {
-                fsrkSensor = isensor;
-            }
         }
 
         isensor.Next();
@@ -197,12 +189,7 @@ int InputTestApp::OnStartup(int argc, const char** argv)
         if (pSensor)
             pSensor->SetRange(SensorRange(4 * 9.81f, 8 * Math<float>::Pi, 1.0f), true);
 
-        if (fsrkSensor)
-        {
-            // Both sensors
-            pSensor2 = *fsrkSensor.CreateDevice();
-        }
-        else if (oculusSensor2)
+        if (oculusSensor2)
         {
             // Second Oculus sensor, useful for comparing firmware behavior & settings.
             pSensor2 = *oculusSensor2.CreateDevice();
@@ -211,15 +198,9 @@ int InputTestApp::OnStartup(int argc, const char** argv)
                 pSensor2->SetRange(SensorRange(4 * 9.81f, 8 * Math<float>::Pi, 1.0f), true);
         }
     }
-    else if (fsrkSensor)
-    {
-        pSensor = *fsrkSensor.CreateDevice();
-    }
 
     oculusSensor.Clear();
     oculusSensor2.Clear();
-    fsrkSensor.Clear();
-
        
     
     /*
@@ -256,7 +237,8 @@ int InputTestApp::OnStartup(int argc, const char** argv)
         if (!strcmp(argv[i], "-r") && i < argc-1)
             graphics = argv[i+1];
 
-    pRender = pPlatform->SetupGraphics(graphics);
+    pRender = pPlatform->SetupGraphics(OVR_DEFAULT_RENDER_DEVICE_SET, graphics,
+                                       RendererParams());
   
     //WireframeFill = pRender->CreateSimpleFill(Fill::F_Wireframe);
 
@@ -434,7 +416,7 @@ void InputTestApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
             }
             else
             {
-                LogText("OC Angle: %2.3f   FSRK Angle: %2.3f\n",
+                LogText("Angle: %2.3f Secondary Sensor Angle: %2.3f\n",
                         CalcDownAngleDegrees(SFusion.GetOrientation()),
                         CalcDownAngleDegrees(SFusion2.GetOrientation()));
             }                        

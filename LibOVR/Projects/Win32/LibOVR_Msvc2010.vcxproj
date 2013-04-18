@@ -52,7 +52,6 @@
     <ClInclude Include="..\..\Src\OVR_ThreadCommandQueue.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_DeviceManager.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_DeviceStatus.h" />
-    <ClInclude Include="..\..\Src\OVR_Win32_FSRKSensor.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_HID.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_HMDDevice.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_LatencyTest.h" />
@@ -69,6 +68,7 @@
     <ClCompile Include="..\..\Src\Kernel\OVR_RefCount.cpp" />
     <ClCompile Include="..\..\Src\Kernel\OVR_Std.cpp" />
     <ClCompile Include="..\..\Src\Kernel\OVR_String.cpp" />
+    <ClCompile Include="..\..\Src\Kernel\OVR_String_FormatUtil.cpp" />
     <ClCompile Include="..\..\Src\Kernel\OVR_String_PathUtil.cpp" />
     <ClCompile Include="..\..\Src\Kernel\OVR_SysFile.cpp" />
     <ClCompile Include="..\..\Src\Kernel\OVR_System.cpp" />
@@ -82,7 +82,6 @@
     <ClCompile Include="..\..\Src\OVR_ThreadCommandQueue.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_DeviceManager.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_DeviceStatus.cpp" />
-    <ClCompile Include="..\..\Src\OVR_Win32_FSRKSensor.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_HID.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_HMDDevice.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_LatencyTest.cpp" />

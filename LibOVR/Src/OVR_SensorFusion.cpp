@@ -22,18 +22,6 @@ namespace OVR {
 //-------------------------------------------------------------------------------------
 // ***** Sensor Fusion
 
-/*
-template<class T>
-Quat<T> AngVToYawPitchRollQuatf(Vector3<T> avgAngV)
-{
-    // This defines D3D-compatible coordinate system with Y up, X right and Z forward,
-    // such that Yaw is rotation around Y, Pitch is around X and Roll around Z.
-    Quat<T> qYaw(Vector3<T>(0,1,0), avgAngV.y);
-    Quat<T> qRoll(Vector3<T>(0,0,1), avgAngV.z);
-    Quat<T> qPitch(Vector3<T>(1,0,0), avgAngV.x);
-    return qYaw * qPitch * qRoll;
-}
-*/
 
 bool SensorFusion::AttachToSensor(SensorDevice* sensor)
 {

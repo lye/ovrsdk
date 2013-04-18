@@ -14,7 +14,11 @@ otherwise accompanies this software in either electronic or hard copy form.
 ************************************************************************************/
 
 #include "OVR_Allocator.h"
+#ifdef OVR_OS_MAC
+#include <stdlib.h>
+#else
 #include <malloc.h>
+#endif
 
 namespace OVR {
 

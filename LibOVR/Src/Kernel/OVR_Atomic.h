@@ -238,7 +238,7 @@ struct AtomicOpsRaw_4ByteImpl : public AtomicOpsRawBase
         return ret;
     }
 
-#elif defined(OVR_CPU_ARM) && (defined(OVR_CC_ARM)
+#elif defined(OVR_CPU_ARM) && defined(OVR_CC_ARM)
     typedef UInt32 T;
 
     static inline UInt32   Exchange_NoSync(volatile UInt32 *i, UInt32 j)

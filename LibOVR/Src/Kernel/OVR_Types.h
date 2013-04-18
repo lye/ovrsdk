@@ -380,7 +380,7 @@ namespace BaseTypes
 #    define OVR_DEBUG_BREAK     do { __debugbreak(); } while(0)
 #  endif
 // Unix specific debugging support
-#elif defined(OVR_CPU_X86)
+#elif defined(OVR_CPU_X86) || defined(OVR_CPU_X86_64)
 #  define OVR_DEBUG_BREAK       do { OVR_ASM("int $3\n\t"); } while(0)
 #else
 #  define OVR_DEBUG_BREAK       do { *((int *) 0) = 1; } while(0)

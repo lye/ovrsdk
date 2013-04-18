@@ -4,6 +4,7 @@ Filename    :   OculusWorldDemo.cpp
 Content     :   First-person view test application for Oculus Rift
 Created     :   October 4, 2012
 Authors     :   Michael Antonov, Andrew Reisse
+				Peter Hoff, Dan Goodman, Bryan Croteau
 
 Copyright   :   Copyright 2012 Oculus, Inc. All Rights reserved.
 
@@ -15,57 +16,51 @@ otherwise accompanies this software in either electronic or hard copy form.
 
 #include "OVR.h"
 
+#include "XmlHandler.h"
+#include "Player.h"
 #include "../CommonSrc/Platform/Platform_Default.h"
-#include "../CommonSrc/Renderer/Renderer.h"
-#include "../CommonSrc/Renderer/Renderer_Stereo.h"
-#include "../CommonSrc/Renderer/FontEmbed_DejaVu48.h"
+#include "../CommonSrc/Render/Render_Device.h"
+#include "../CommonSrc/Render/Render_Stereo.h"
+#include "../CommonSrc/Render/Render_FontEmbed_DejaVu48.h"
 
 #include <Kernel/OVR_SysFile.h>
+
+// Filename to be loaded by default, searching specified paths.
+#define WORLDDEMO_ASSET_FILE  "Tuscany.xml"
+#define WORLDDEMO_ASSET_PATH1 "Assets/Tuscany/"
+#define WORLDDEMO_ASSET_PATH2 "../Assets/Tuscany/"
+// This path allows the shortcut to work.
+#define WORLDDEMO_ASSET_PATH3 "Samples/OculusWorldDemo/Assets/Tuscany/"
+
 
 using namespace OVR;
 using namespace OVR::Platform;
 using namespace OVR::Render;
 
-
 //-------------------------------------------------------------------------------------
 // ***** OculusWorldDemo Description
 
-// This app renders a simple flat-shaded room allowing the user to move along the 
+// This app renders a simple flat-shaded room allowing the user to move along the
 // floor and look around with an HMD, mouse and keyboard. The following keys work:
 //
-//  'W', 'S', 'A', 'D' - Move forward, back; strafe left/right.
+//  'W', 'S', 'A', 'D' and Arrow Keys - Move forward, back; strafe left/right.
 //  F1 - No stereo, no distortion.
 //  F2 - Stereo, no distortion.
 //  F3 - Stereo and distortion.
 //  F8 - Toggle MSAA.
-//  F9 - Set FullScreen mode on the HMD; necessary for previwing content with Rift.
+//  F9 - Set FullScreen mode on the HMD; necessary for previewing content with Rift.
 //
 // Important Oculus-specific logic can be found at following locations:
 //
 //  OculusWorldDemoApp::OnStartup - This function will initialize OVR::DeviceManager and HMD,
-//                                  creating SensorDevice and attaching it to SensorFusion.
-//                                  This needs to be done before obtaining sensor data.
+//									creating SensorDevice and attaching it to SensorFusion.
+//									This needs to be done before obtaining sensor data.
 //
 //  OculusWorldDemoApp::OnIdle    - Here we poll SensorFusion for orientation, apply it
-//                                  to the scene and handle movement.
-//                                  Stereo rendering is also done here, by delegating to
-//                                  to Render function for each eye.
-// 
-
-//-------------------------------------------------------------------------------------
-// The RHS coordinate system is defines as follows (as seen in perspective view):
-//  Y - Up
-//  Z - Back
-//  X - Right
-const Vector3f UpVector(0.0f, 1.0f, 0.0f);
-const Vector3f ForwardVector(0.0f, 0.0f, -1.0f);
-const Vector3f RightVector(1.0f, 0.0f, 0.0f);
-
-// We start out looking in the positive Z (180 degree rotation).
-const float    YawInitial = 3.141592f;
-const float    Sensitivity = 1.0f;
-const float    MoveSpeed   = 3.0f; // m/s
-
+//									to the scene and handle movement.
+//									Stereo rendering is also done here, by delegating to
+//									to Render function for each eye.
+//
 
 //-------------------------------------------------------------------------------------
 // ***** OculusWorldDemo Application class
@@ -98,85 +93,106 @@ public:
 
     // Sets temporarily displayed message for adjustments
     void         SetAdjustMessage(const char* format, ...);
+    // Overrides current timeout, in seconds (not the future default value);
+    // intended to be called right after SetAdjustMessage.
+    void         SetAdjustMessageTimeout(float timeout);
 
     // Stereo setting adjustment functions.
     // Called with deltaTime when relevant key is held.
     void         AdjustFov(float dt);
     void         AdjustAspect(float dt);
     void         AdjustIPD(float dt)
-    {        
+    {
         SConfig.SetIPD(SConfig.GetIPD() + 0.0025f * dt);
         SetAdjustMessage("EyeDistance: %6.4f", SConfig.GetIPD());
     }
-    
+
     void         AdjustDistortion(float dt, int kIndex, const char* label);
-    void         AdjustDistortionK0(float dt) { AdjustDistortion(dt, 0, "K0"); }
-    void         AdjustDistortionK1(float dt) { AdjustDistortion(dt, 1, "K1"); }
-    void         AdjustDistortionK2(float dt) { AdjustDistortion(dt, 2, "K2"); }
-    void         AdjustDistortionK3(float dt) { AdjustDistortion(dt, 3, "K3"); }
+    void         AdjustDistortionK0(float dt)  { AdjustDistortion(dt, 0, "K0"); }
+    void         AdjustDistortionK1(float dt)  { AdjustDistortion(dt, 1, "K1"); }
+    void         AdjustDistortionK2(float dt)  { AdjustDistortion(dt, 2, "K2"); }
+    void         AdjustDistortionK3(float dt)  { AdjustDistortion(dt, 3, "K3"); }
 
     // Adds room model to scene.
-    void         PopulateScene();
+    void         PopulateScene(const char* fileName);
+    void         PopulatePreloadScene();
+    void		 ClearScene();
 
 protected:
-    Renderer*                   pRender;
-    RendererParams              RenderParams;
-    int                         Width, Height;
-    
+    RenderDevice*       pRender;
+    RendererParams      RenderParams;
+    int                 Width, Height;
+    int                 Screen;
+    int                 FirstScreenInCycle;
+
     // *** Oculus HMD Variables
-    Ptr<DeviceManager>          pManager;
-    Ptr<SensorDevice>           pSensor;
-    Ptr<HMDDevice>              pHMD;
-    SensorFusion                SFusion;
-    HMDInfo                     HMDInfo;
+    Ptr<DeviceManager>  pManager;
+    Ptr<SensorDevice>   pSensor;
+    Ptr<HMDDevice>      pHMD;
+    SensorFusion        SFusion;
+    HMDInfo             HMDInfo;
 
-    Ptr<LatencyTestDevice>      pLatencyTester;
-    LatencyTestUtil             LatencyUtil;
+    Ptr<LatencyTestDevice>  pLatencyTester;
+    LatencyTestUtil         LatencyUtil;
 
-    double                      LastUpdate;
+    double              LastUpdate;
+    int                 FPS;
+    int                 FrameCounter;
+    double              NextFPSUpdate;
+	size_t				TotalTextureMemoryUsage;
 
-    int                         FPS;
-    int                         FrameCounter;
-    double                      NextFPSUpdate;
+    Array<Ptr<CollisionModel> > CollisionModels;
+    Array<Ptr<CollisionModel> > GroundCollisionModels;
 
-    // Position and look. The following apply:
-    Vector3f                    EyePos;
-    float                       EyeYaw;         // Rotation around Y, CCW positive when looking at RHS (X,Z) plane.
-    float                       EyePitch;       // Pitch. If sensor is plugged in, only read from sensor.
-    float                       EyeRoll;        // Roll, only accessible from Sensor.
-    float                       LastSensorYaw;  // Stores previous Yaw value from to support computing delta.
+    // Loading process displays screenshot in first frame
+    // and then proceeds to load until finished.
+    enum LoadingStateType
+    {
+        LoadingState_Frame0,
+        LoadingState_DoLoad,
+        LoadingState_Finished
+    };
 
-    // Movement state; different bits may be set based on the state of keys.
-    UByte                       MoveForward;
-    UByte                       MoveBack;
-    UByte                       MoveLeft;
-    UByte                       MoveRight;
-    Vector3f                    GamepadMove, GamepadRotate;
+	// Player
+	Player				Player;
+    Matrix4f            View;
+    Scene               MainScene;
+    Scene               LoadingScene;
+    Scene               GridScene;
+    LoadingStateType    LoadingState;
 
-    Matrix4f                    View;
-    Scene                       GridScene;
-    Scene                       Scene;    
-    Ptr<ShaderFill>             LitSolid, LitTextures[4];
+    Ptr<ShaderFill>     LitSolid, LitTextures[4];
 
-      // Stereo view parameters.
-    StereoConfig                SConfig;
-    PostProcessType             PostProcess;
- 
-    String                      AdjustMessage;
-    double                      AdjustMessageTimeout;
+    // Stereo view parameters.
+    StereoConfig        SConfig;
+    PostProcessType     PostProcess;
+
+    // LOD
+    String	            MainFilePath;
+    Array<String>       LODFilePaths;
+    int					ConsecutiveLowFPSFrames;
+    int					CurrentLODFileIndex;
+
+    float               DistortionK0;
+    float               DistortionK1;
+    float               DistortionK2;
+    float               DistortionK3;
+
+    String              AdjustMessage;
+    double              AdjustMessageTimeout;
 
     // Saved distortion state.
-    float                       SavedK0, SavedK1, SavedK2, SavedK3;
-    float                       SavedESD, SavedAspect, SavedEyeDistance;
+    float               SavedK0, SavedK1, SavedK2, SavedK3;
+    float               SavedESD, SavedAspect, SavedEyeDistance;
 
     // Allows toggling color around distortion.
-    Color                       DistortionClearColor;
+    Color               DistortionClearColor;
 
     // Stereo settings adjustment state.
     typedef void (OculusWorldDemoApp::*AdjustFuncType)(float);
-    bool                        ShiftDown;
-    AdjustFuncType              pAdjustFunc;    
-    float                       AdjustDirection;
+    bool                ShiftDown;
+    AdjustFuncType      pAdjustFunc;
+    float               AdjustDirection;
 
     enum SceneRenderMode
     {
@@ -185,7 +201,7 @@ protected:
         Scene_Both,
 
     };
-    SceneRenderMode             SceneMode;
+    SceneRenderMode    SceneMode;
 
 
     enum TextScreen
@@ -196,9 +212,14 @@ protected:
         Text_Help,
         Text_Count
     };
-    TextScreen                  TextScreen;
+    TextScreen          TextScreen;
 
-    Model* OculusWorldDemoApp::CreateModel(Vector3f pos, struct SlabModel* sm);
+    Model* CreateModel(Vector3f pos, struct SlabModel* sm);
+    Model* CreateBoundingModel(CollisionModel &cm);
+    void PopulateLODFileNames();
+    void DropLOD();
+    void RaiseLOD();
+    void CycleDisplay();
 };
 
 //-------------------------------------------------------------------------------------
@@ -206,13 +227,11 @@ protected:
 OculusWorldDemoApp::OculusWorldDemoApp()
     : pRender(0),
       LastUpdate(0),
+      LoadingState(LoadingState_Frame0),
       // Initial location
-      EyePos(0.0f, 1.6f, -5.0f),
-      EyeYaw(YawInitial), EyePitch(0), EyeRoll(0),
-      LastSensorYaw(0),
       SConfig(),
-      PostProcess(PostProcess_None),   
-      DistortionClearColor(0,0,0),
+      PostProcess(PostProcess_Distortion),
+      DistortionClearColor(0, 0, 0),
 
       ShiftDown(false),
       pAdjustFunc(0),
@@ -222,34 +241,37 @@ OculusWorldDemoApp::OculusWorldDemoApp()
 {
     Width  = 1280;
     Height = 800;
-   
-    FPS          = 0;
+    Screen = 0;
+    FirstScreenInCycle = 0;
+
+    FPS = 0;
     FrameCounter = 0;
-    NextFPSUpdate= 0;
-    
-    MoveForward   = MoveBack = MoveLeft = MoveRight = 0;
-    GamepadMove   = Vector3f(0);
-    GamepadRotate = Vector3f(0);
+    NextFPSUpdate = 0;
+
+    ConsecutiveLowFPSFrames = 0;
+    CurrentLODFileIndex = 0;
 
     AdjustMessageTimeout = 0;
 }
 
 OculusWorldDemoApp::~OculusWorldDemoApp()
 {
-	RemoveHandlerFromDevices();
+    RemoveHandlerFromDevices();
 
-    if (DejaVu.fill)
+    if(DejaVu.fill)
+    {
         DejaVu.fill->Release();
+    }
     pSensor.Clear();
     pHMD.Clear();
+	CollisionModels.ClearAndRelease();
+	GroundCollisionModels.ClearAndRelease();
 }
 
 int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
 {
     OVR::HMDInfo hmd;
 
-    // Report relative mouse motion in OnMouseMove
-    pPlatform->SetMouseMode(Mouse_Relative);
 
     // *** Oculus HMD & Sensor Initialization
 
@@ -259,11 +281,11 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
 
     pManager = *DeviceManager::Create();
 
-	// We'll handle it's messages in this case.
-	pManager->SetMessageHandler(this);
+    // We'll handle it's messages in this case.
+    pManager->SetMessageHandler(this);
 
-    pHMD     = *pManager->EnumerateDevices<HMDDevice>().CreateDevice();    
-    if (pHMD)
+    pHMD     = *pManager->EnumerateDevices<HMDDevice>().CreateDevice();
+    if(pHMD)
     {
         pSensor = *pHMD->GetSensor();
 
@@ -271,9 +293,9 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
         // screen size and other variables needed for correct projection.
         // We pass HMD DisplayDeviceName into the renderer to select the
         // correct monitor in full-screen mode.
-        if (pHMD->GetDeviceInfo(&hmd))
-        {            
-            RenderParams.MonitorName = hmd.DisplayDeviceName;
+        if(pHMD->GetDeviceInfo(&hmd))
+        {
+            //RenderParams.MonitorName = hmd.DisplayDeviceName;
             SConfig.SetHMDInfo(hmd);
         }
     }
@@ -283,7 +305,7 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
         // This is useful for debugging sensor interaction; it is not needed in
         // a shipping app.
         pSensor = *pManager->EnumerateDevices<SensorDevice>().CreateDevice();
-	}
+    }
 
     // Create the Latency Tester device and assign it to the LatencyTesterUtil object.
     pLatencyTester = *pManager->EnumerateDevices<LatencyTestDevice>().CreateDevice();
@@ -291,97 +313,147 @@ int OculusWorldDemoApp::OnStartup(int argc, const char** argv)
     {
         LatencyUtil.SetDevice(pLatencyTester);
     }
+    // Make the user aware which devices are present.
+    if(pHMD == NULL && pSensor == NULL)
+    {
+        SetAdjustMessage("---------------------------------\nNO HMD DETECTED\nNO SENSOR DETECTED\n---------------------------------");
+    }
+    else if(pHMD == NULL)
+    {
+        SetAdjustMessage("----------------------------\nNO HMD DETECTED\n----------------------------");
+    }
+    else if(pSensor == NULL)
+    {
+        SetAdjustMessage("---------------------------------\nNO SENSOR DETECTED\n---------------------------------");
+    }
+    else
+    {
+        SetAdjustMessage("--------------------------------------------\n"
+                         "Press F9 for Full-Screen on Rift\n"
+                         "--------------------------------------------");
+    }
 
-	// Make the user aware which devices are present.
-	if (pHMD == NULL && pSensor == NULL)
-	{
-		SetAdjustMessage("---------------------------------\nNO HMD DETECTED\nNO SENSOR DETECTED\n---------------------------------");
-	}
-	else if (pHMD == NULL)
-	{
-		SetAdjustMessage("----------------------------\nNO HMD DETECTED\n----------------------------");
-	}
-	else if (pSensor == NULL)
-	{
-		SetAdjustMessage("---------------------------------\nNO SENSOR DETECTED\n---------------------------------");
-	}
+    // First message should be extra-long.
+    SetAdjustMessageTimeout(10.0f);
 
 
-    if (hmd.HResolution > 0)
+    if(hmd.HResolution > 0)
     {
         Width  = hmd.HResolution;
         Height = hmd.VResolution;
     }
 
-    if (!pPlatform->SetupWindow(Width,Height))
+    if(!pPlatform->SetupWindow(Width, Height))
+    {
         return 1;
+    }
 
     String Title = "Oculus World Demo";
-    if (hmd.ProductName[0])
+    if(hmd.ProductName[0])
     {
         Title += " : ";
         Title += hmd.ProductName;
     }
     pPlatform->SetWindowTitle(Title);
 
-    if (pSensor)
+    // Report relative mouse motion in OnMouseMove
+    pPlatform->SetMouseMode(Mouse_Relative);
+    
+    if(pSensor)
     {
-        // We need to attach sensor to SensorFusion object for it to receive 
-        // body frame messages and update orientation. SFusion.GetOrientation() 
+        // We need to attach sensor to SensorFusion object for it to receive
+        // body frame messages and update orientation. SFusion.GetOrientation()
         // is used in OnIdle() to orient the view.
         SFusion.AttachToSensor(pSensor);
 
         SFusion.SetDelegateMessageHandler(this);
     }
 
-    
+
     // *** Initialize Rendering
 
     const char* graphics = "d3d11";
 
     // Select renderer based on command line arguments.
-    for (int i = 1; i < argc; i++)
+    for(int i = 1; i < argc; i++)
     {
-        if (!strcmp(argv[i], "-r") && i < argc-1)
-            graphics = argv[i+1];
-        else if (!strcmp(argv[i], "-fs"))
+        if(!strcmp(argv[i], "-r") && i < argc - 1)
+        {
+            graphics = argv[i + 1];
+        }
+        else if(!strcmp(argv[i], "-fs"))
+        {
             RenderParams.Fullscreen = true;
+        }
     }
 
     // Enable multi-sampling by default.
     RenderParams.Multisample = 4;
-    pRender = pPlatform->SetupGraphics(graphics, RenderParams);
-  
+    pRender = pPlatform->SetupGraphics(OVR_DEFAULT_RENDER_DEVICE_SET,
+                                       graphics, RenderParams);
+
 
 
     // *** Configure Stereo settings.
 
-    SConfig.SetFullViewport(Viewport(0,0, Width, Height));
+    SConfig.SetFullViewport(Viewport(0, 0, Width, Height));
     SConfig.SetStereoMode(Stereo_LeftRight_Multipass);
 
     // Configure proper Distortion Fit.
     // For 7" screen, fit to touch left side of the view, leaving a bit of invisible
     // screen on the top (saves on rendering cost).
     // For smaller screens (5.5"), fit to the top.
-    if (hmd.HScreenSize > 0.140f) // 7"
+    if(hmd.HScreenSize > 0.140f)  // 7"
+    {
         SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);
+    }
     else
+    {
         SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+    }
 
     pRender->SetSceneRenderScale(SConfig.GetDistortionScale());
+    //pRender->SetSceneRenderScale(0.8f);
 
     SConfig.Set2DAreaFov(DegreeToRad(85.0f));
 
 
-    // *** Populate Room Scene
-
+    // *** Identify Scene File & Prepare for Loading
+   
     // This creates lights and models.
-    PopulateScene();
+    if (argc == 2)
+    {        
+        MainFilePath = argv[1];
+        PopulateLODFileNames();
+    }
+    else
+    {
+        fprintf(stderr, "Usage: OculusWorldDemo [input XML]\n");
+        MainFilePath = WORLDDEMO_ASSET_FILE;	
+    }
 
+    // Try to modify path for correctness in case specified file is not found.
+    if (!SysFile(MainFilePath).IsValid())
+    {
+        String prefixPath1(pPlatform->GetContentDirectory() + "/" + WORLDDEMO_ASSET_PATH1),
+               prefixPath2(WORLDDEMO_ASSET_PATH2),
+               prefixPath3(WORLDDEMO_ASSET_PATH3);
+        if (SysFile(prefixPath1 + MainFilePath).IsValid())
+            MainFilePath = prefixPath1 + MainFilePath;
+        else if (SysFile(prefixPath2 + MainFilePath).IsValid())
+            MainFilePath = prefixPath2 + MainFilePath;
+        else if (SysFile(prefixPath3 + MainFilePath).IsValid())
+            MainFilePath = prefixPath3 + MainFilePath;
+    }
+
+    PopulatePreloadScene();
 
     LastUpdate = pPlatform->GetAppTime();
+	//pPlatform->PlayMusicFile(L"Loop.wav");
+
     return 0;
 }
+
 
 void OculusWorldDemoApp::OnMessage(const Message& msg)
 {
@@ -407,38 +479,42 @@ void OculusWorldDemoApp::OnResize(int width, int height)
 {
     Width  = width;
     Height = height;
-    SConfig.SetFullViewport(Viewport(0,0, Width, Height));
+    SConfig.SetFullViewport(Viewport(0, 0, Width, Height));
 }
 
 void OculusWorldDemoApp::OnGamepad(const GamepadState& pad)
 {
-    GamepadMove   = Vector3f(pad.LX * pad.LX * (pad.LX > 0 ? 1 : -1),
+    Player.GamepadMove   = Vector3f(pad.LX * pad.LX * (pad.LX > 0 ? 1 : -1),
                              0,
                              pad.LY * pad.LY * (pad.LY > 0 ? -1 : 1));
-    GamepadRotate = Vector3f(2 * pad.RX, -2 * pad.RY, 0);
+    Player.GamepadRotate = Vector3f(2 * pad.RX, -2 * pad.RY, 0);
 }
 
 void OculusWorldDemoApp::OnMouseMove(int x, int y, int modifiers)
 {
-    if (modifiers & Mod_MouseRelative)
+    if(modifiers & Mod_MouseRelative)
     {
         // Get Delta
         int dx = x, dy = y;
- 
-        const float maxPitch = ((3.1415f/2)*0.98f);
+
+        const float maxPitch = ((3.1415f / 2) * 0.98f);
 
         // Apply to rotation. Subtract for right body frame rotation,
         // since yaw rotation is positive CCW when looking down on XZ plane.
-        EyeYaw   -= (Sensitivity * dx)/ 360.0f;
+        Player.EyeYaw   -= (Sensitivity * dx) / 360.0f;
 
-        if (!pSensor)
+        if(!pSensor)
         {
-            EyePitch -= (Sensitivity * dy)/ 360.0f;
-            
-            if (EyePitch > maxPitch)
-                EyePitch = maxPitch;
-            if (EyePitch < -maxPitch)
-                EyePitch = -maxPitch;
+            Player.EyePitch -= (Sensitivity * dy) / 360.0f;
+
+            if(Player.EyePitch > maxPitch)
+            {
+                Player.EyePitch = maxPitch;
+            }
+            if(Player.EyePitch < -maxPitch)
+            {
+                Player.EyePitch = -maxPitch;
+            }
         }
     }
 }
@@ -448,56 +524,96 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
 {
     OVR_UNUSED(chr);
 
-    switch (key)
+    switch(key)
     {
     case Key_Q:
-        if (down && (modifiers & Mod_Control))
+        if(down && (modifiers & Mod_Control))
+        {
             pPlatform->Exit(0);
+        }
         break;
 
-    // Handle player movement keys.
-    // We just update movement state here, while the actual translation is done in OnIdle()
-    // based on time.
-    case Key_W:     MoveForward = down ? (MoveForward | 1) : (MoveForward & ~1); break;
-    case Key_S:     MoveBack    = down ? (MoveBack    | 1) : (MoveBack    & ~1); break;
-    case Key_A:     MoveLeft    = down ? (MoveLeft    | 1) : (MoveLeft    & ~1); break;
-    case Key_D:     MoveRight   = down ? (MoveRight   | 1) : (MoveRight   & ~1); break;
-    case Key_Up:    MoveForward = down ? (MoveForward | 2) : (MoveForward & ~2); break;
-    case Key_Down:  MoveBack    = down ? (MoveBack    | 2) : (MoveBack    & ~2); break;
+        // Handle player movement keys.
+        // We just update movement state here, while the actual translation is done in OnIdle()
+        // based on time.
+    case Key_W:
+        Player.MoveForward = down ? (Player.MoveForward | 1) : (Player.MoveForward & ~1);
+        break;
+    case Key_S:
+        Player.MoveBack    = down ? (Player.MoveBack    | 1) : (Player.MoveBack    & ~1);
+        break;
+    case Key_A:
+        Player.MoveLeft    = down ? (Player.MoveLeft    | 1) : (Player.MoveLeft    & ~1);
+        break;
+    case Key_D:
+        Player.MoveRight   = down ? (Player.MoveRight   | 1) : (Player.MoveRight   & ~1);
+        break;
+    case Key_Up:
+        Player.MoveForward = down ? (Player.MoveForward | 2) : (Player.MoveForward & ~2);
+        break;
+    case Key_Down:
+        Player.MoveBack    = down ? (Player.MoveBack    | 2) : (Player.MoveBack    & ~2);
+        break;
+    case Key_Left:
+        Player.MoveLeft    = down ? (Player.MoveLeft    | 2) : (Player.MoveLeft    & ~2);
+        break;
+    case Key_Right:
+        Player.MoveRight   = down ? (Player.MoveRight   | 2) : (Player.MoveRight   & ~2);
+        break;
+
+    case Key_Minus:
+        Player.EyeHeight -= 0.05f;
+        Player.EyePos.y -= 0.05f;
+        break;
+    case Key_Equal:
+        Player.EyeHeight += 0.05f;
+        Player.EyePos.y += 0.05f;
+        break;
 
     case Key_B:
-        if (down)
-        {            
-            if (SConfig.GetDistortionScale() == 1.0f)
+    {
+        if(down)
+        {
+            if(SConfig.GetDistortionScale() == 1.0f)
             {
-                if (SConfig.GetHMDInfo().HScreenSize > 0.140f) // 7"
+                if(SConfig.GetHMDInfo().HScreenSize > 0.140f)  // 7"
+                {
                     SConfig.SetDistortionFitPointVP(-1.0f, 0.0f);
-                else
-                    SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
+                }
             }
             else
             {
-                // No fitting; scale == 1.0.
-                SConfig.SetDistortionFitPointVP(0, 0);
+                SConfig.SetDistortionFitPointVP(0.0f, 1.0f);
             }
         }
-        break;
+        else
+        {
+            // No fitting; scale == 1.0.
+            SConfig.SetDistortionFitPointVP(0, 0);
+        }
+    }
+    break;
 
 
     // Support toggling background color doe distortion so that we can see
     // effect on the periphery.
     case Key_V:
-        if (down)
+        if(down)
         {
-            if (DistortionClearColor.B == 0)
-                DistortionClearColor = Color(0,128,255);
+            if(DistortionClearColor.B == 0)
+            {
+                DistortionClearColor = Color(0, 128, 255);
+            }
             else
-                DistortionClearColor = Color(0,0,0);
+            {
+                DistortionClearColor = Color(0, 0, 0);
+            }
 
             pRender->SetDistortionClearColor(DistortionClearColor);
         }
         break;
-    
+
+
     case Key_F1:
         SConfig.SetStereoMode(Stereo_None);
         PostProcess = PostProcess_None;
@@ -508,7 +624,6 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
         PostProcess = PostProcess_None;
         SetAdjustMessage("StereoMode: Stereo + No Distortion");
         break;
-        
     case Key_F3:
         SConfig.SetStereoMode(Stereo_LeftRight_Multipass);
         PostProcess = PostProcess_Distortion;
@@ -521,76 +636,128 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
         break;
 
     case Key_Space:
-        if (!down)
+        if(!down)
+        {
             TextScreen = (enum TextScreen)((TextScreen + 1) % Text_Count);
+        }
         break;
 
     case Key_F8:
-        if (!down)
+        if(!down)
         {
+			RenderParams = pRender->GetParams();
             RenderParams.Multisample = RenderParams.Multisample > 1 ? 1 : 4;
             pRender->SetParams(RenderParams);
-            if (RenderParams.Multisample > 1)
+            if(RenderParams.Multisample > 1)
+            {
                 SetAdjustMessage("Multisampling On");
+            }
             else
+            {
                 SetAdjustMessage("Multisampling Off");
+            }
         }
         break;
     case Key_F9:
-        if (!down)
+        if(!down)
         {
-            pRender->SetFullscreen(pRender->IsFullscreen() ? Display_Window : Display_Fullscreen);
-            // If using an HMD, enable post-process (for distortion) and stereo.
-            if (RenderParams.MonitorName.GetLength() && pRender->IsFullscreen())
-            {
-                SConfig.SetStereoMode(Stereo_LeftRight_Multipass);                
-                PostProcess = PostProcess_Distortion;
-            }
+            CycleDisplay();
         }
         break;
 
     case Key_F11:
         if (!down)
         {
-            pPlatform->SetMouseMode(Mouse_Normal);
-            pRender->SetFullscreen(pRender->IsFullscreen() ? Display_Window : Display_FakeFullscreen);
+            RenderParams = pRender->GetParams();
+            RenderParams.MonitorName = SConfig.GetHMDInfo().DisplayDeviceName;
+            pRender->SetParams(RenderParams);
+
+            pPlatform->SetMouseMode(Mouse_Normal);            
+            pPlatform->SetFullscreen(RenderParams, pRender->IsFullscreen() ? Display_Window : Display_FakeFullscreen);
             pPlatform->SetMouseMode(Mouse_Relative); // Avoid mode world rotation jump.
             // If using an HMD, enable post-process (for distortion) and stereo.
-            if (RenderParams.MonitorName.GetLength() && pRender->IsFullscreen())
+            if(RenderParams.MonitorName.GetLength() && pRender->IsFullscreen())
             {
-                SConfig.SetStereoMode(Stereo_LeftRight_Multipass);                
+                SConfig.SetStereoMode(Stereo_LeftRight_Multipass);
                 PostProcess = PostProcess_Distortion;
             }
         }
         break;
 
     case Key_Escape:
-        if (!down)
-            pRender->SetFullscreen(Display_Window);
+        if(!down)
+        {
+            // switch to primary screen windowed mode
+            pPlatform->SetFullscreen(RenderParams, Display_Window);
+            RenderParams.MonitorName = pPlatform->GetScreenName(0);
+            pRender->SetParams(RenderParams);
+            Screen = 0;
+        }
         break;
-    
-    // Stereo adjustments.    
-    case Key_BracketLeft:  pAdjustFunc = down ? &OculusWorldDemoApp::AdjustFov    : 0;  AdjustDirection = 1;  break;
-    case Key_BracketRight: pAdjustFunc = down ? &OculusWorldDemoApp::AdjustFov    : 0;  AdjustDirection = -1; break;
-    case Key_Equal:    
-    case Key_Insert:       pAdjustFunc = down ? &OculusWorldDemoApp::AdjustIPD    : 0;  AdjustDirection = 1;  break;
-    case Key_Minus:
-    case Key_Delete:       pAdjustFunc = down ? &OculusWorldDemoApp::AdjustIPD    : 0;  AdjustDirection = -1; break;
-    case Key_PageUp:       pAdjustFunc = down ? &OculusWorldDemoApp::AdjustAspect : 0;  AdjustDirection = 1;  break;
-    case Key_PageDown:     pAdjustFunc = down ? &OculusWorldDemoApp::AdjustAspect : 0;  AdjustDirection = -1; break;
 
-    // Distortion correction adjustments
-    case Key_H:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK0 : NULL; AdjustDirection = -1;  break;
-    case Key_Y:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK0 : NULL; AdjustDirection = 1;   break;
-    case Key_J:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK1 : NULL; AdjustDirection = -1;  break;
-    case Key_U:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK1 : NULL; AdjustDirection = 1;   break;
-    case Key_K:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK2 : NULL; AdjustDirection = -1;  break;
-    case Key_I:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK2 : NULL; AdjustDirection = 1;   break;
-    case Key_L:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK3 : NULL; AdjustDirection = -1;  break;
-    case Key_O:            pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK3 : NULL; AdjustDirection = 1;   break;
+        // Stereo adjustments.
+    case Key_BracketLeft:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustFov    : 0;
+        AdjustDirection = 1;
+        break;
+    case Key_BracketRight:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustFov    : 0;
+        AdjustDirection = -1;
+        break;
+    case Key_Insert:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustIPD    : 0;
+        AdjustDirection = 1;
+        break;
+    case Key_Delete:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustIPD    : 0;
+        AdjustDirection = -1;
+        break;
+    case Key_PageUp:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustAspect : 0;
+        AdjustDirection = 1;
+        break;
+    case Key_PageDown:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustAspect : 0;
+        AdjustDirection = -1;
+        break;
+
+        // Distortion correction adjustments
+    case Key_H:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK0 : NULL;
+        AdjustDirection = -1;
+        break;
+    case Key_Y:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK0 : NULL;
+        AdjustDirection = 1;
+        break;
+    case Key_J:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK1 : NULL;
+        AdjustDirection = -1;
+        break;
+    case Key_U:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK1 : NULL;
+        AdjustDirection = 1;
+        break;
+    case Key_K:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK2 : NULL;
+        AdjustDirection = -1;
+        break;
+    case Key_I:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK2 : NULL;
+        AdjustDirection = 1;
+        break;
+    case Key_L:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK3 : NULL;
+        AdjustDirection = -1;
+        break;
+    case Key_O:
+        pAdjustFunc = down ? &OculusWorldDemoApp::AdjustDistortionK3 : NULL;
+        AdjustDirection = 1;
+        break;
+
 
     case Key_Tab:
-        if (down)
+        if(down)
         {
             float t0      = SConfig.GetDistortionK(0),
                   t1      = SConfig.GetDistortionK(1),
@@ -600,7 +767,7 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
                   taspect = SConfig.GetAspectMultiplier(),
                   tipd    = SConfig.GetIPD();
 
-            if (SavedK0 > 0.0f)
+            if(SavedK0 > 0.0f)
             {
                 SConfig.SetDistortionK(0, SavedK0);
                 SConfig.SetDistortionK(1, SavedK1);
@@ -614,9 +781,9 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
                                  "ESD:\t120 %.3f\t350 Eye:\t490 %.3f\n"
                                  "K0: \t120 %.4f\t350 K2: \t490 %.4f\n"
                                  "K1: \t120 %.4f\t350 K3: \t490 %.4f",
-                                  SavedESD, SavedEyeDistance,
-                                  SavedK0, SavedK2,
-                                  SavedK1, SavedK3);
+                                 SavedESD, SavedEyeDistance,
+                                 SavedK0, SavedK2,
+                                 SavedK1, SavedK3);
             }
             else
             {
@@ -630,24 +797,23 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
             SavedESD = tESD;
             SavedAspect = taspect;
             SavedEyeDistance = tipd;
-        }        
+        }
         break;
-
  
     case Key_G:
-        if (down)
+        if(down)
         {
-            if (SceneMode == Scene_World)
+            if(SceneMode == Scene_World)
             {
                 SceneMode = Scene_Grid;
                 SetAdjustMessage("Grid Only");
             }
-            else if (SceneMode == Scene_Grid)
+            else if(SceneMode == Scene_Grid)
             {
                 SceneMode = Scene_Both;
                 SetAdjustMessage("Grid Overlay");
             }
-            else if (SceneMode == Scene_Both)
+            else if(SceneMode == Scene_Both)
             {
                 SceneMode = Scene_World;
                 SetAdjustMessage("Grid Off");
@@ -655,13 +821,39 @@ void OculusWorldDemoApp::OnKey(KeyCode key, int chr, bool down, int modifiers)
             break;
         }
 
-    // Holding down Shift key accelerates adjustment velocity.
+        // Holding down Shift key accelerates adjustment velocity.
     case Key_Shift:
         ShiftDown = down;
         break;
+
+        // Reset the camera position in case we get stuck
+    case Key_T:
+        Player.EyePos = Vector3f(10.0f, 1.6f, 10.0f);
+        break;
+
+    case Key_C:
+        if(!down)
+        {
+            UPInt numNodes = MainScene.Models.GetSize();
+            for(UPInt i = 0; i < numNodes; i++)
+            {
+                Ptr<OVR::Render::Model> nodePtr = MainScene.Models[i];
+                Render::Model*          pNode = nodePtr.GetPtr();
+                if(pNode->IsCollisionModel)
+                {
+                    pNode->Visible = !pNode->Visible;
+                }
+            }
+            break;
+        }
+    case Key_N:
+        RaiseLOD();
+        break;
+    case Key_M:
+        DropLOD();
+        break;
     }
 }
-
 
 void OculusWorldDemoApp::OnIdle()
 {
@@ -669,38 +861,53 @@ void OculusWorldDemoApp::OnIdle()
     float  dt      = float(curtime - LastUpdate);
     LastUpdate     = curtime;
 
+    if (LoadingState == LoadingState_DoLoad)
+    {
+        PopulateScene(MainFilePath.ToCStr());
+        LoadingState = LoadingState_Finished;
+        return;
+    }
+
     // If one of Stereo setting adjustment keys is pressed, adjust related state.
     if (pAdjustFunc)
     {
         (this->*pAdjustFunc)(dt * AdjustDirection * (ShiftDown ? 5.0f : 1.0f));
     }
 
+    // Process latency tester results.
+    const char* results = LatencyUtil.GetResultsString();
+    if (results != NULL)
+    {
+        LogText("LATENCY TESTER: %s\n", results); 
+    }
+
+    // Have to place this as close as possible to where the HMD orientation is read.
+    LatencyUtil.ProcessInputs();
+
+
     // Handle Sensor motion.
     // We extract Yaw, Pitch, Roll instead of directly using the orientation
     // to allow "additional" yaw manipulation with mouse/controller.
-    if (pSensor)
-    {        
+    if(pSensor)
+    {
         Quatf    hmdOrient = SFusion.GetOrientation();
 
-        // Have to place this as close as possible to where the HMD orientation is read.
-        LatencyUtil.ProcessInputs();
-
         float    yaw = 0.0f;
-        hmdOrient.GetEulerAngles<Axis_Y, Axis_X, Axis_Z>(&yaw, &EyePitch, &EyeRoll);
+        hmdOrient.GetEulerAngles<Axis_Y, Axis_X, Axis_Z>(&yaw, &Player.EyePitch, &Player.EyeRoll);
 
-        EyeYaw += (yaw - LastSensorYaw);
-        LastSensorYaw = yaw;
-        
+        Player.EyeYaw += (yaw - Player.LastSensorYaw);
+        Player.LastSensorYaw = yaw;
+
         // NOTE: We can get a matrix from orientation as follows:
         // Matrix4f hmdMat(hmdOrient);
 
         // Test logic - assign quaternion result directly to view:
         // Quatf hmdOrient = SFusion.GetOrientation();
         // View = Matrix4f(hmdOrient.Inverted()) * Matrix4f::Translation(-EyePos);
-    }    
+    }
 
 
-    if (curtime >= NextFPSUpdate)
+    if(curtime >= NextFPSUpdate)
     {
         NextFPSUpdate = curtime + 1.0;
         FPS = FrameCounter;
@@ -708,82 +915,65 @@ void OculusWorldDemoApp::OnIdle()
     }
     FrameCounter++;
 
-    
-    EyeYaw -= GamepadRotate.x * dt;
-
-    if (!pSensor)
+    if(FPS < 40)
     {
-        EyePitch -= GamepadRotate.y * dt;
-
-        const float maxPitch = ((3.1415f/2)*0.98f);
-        if (EyePitch > maxPitch)
-            EyePitch = maxPitch;
-        if (EyePitch < -maxPitch)
-            EyePitch = -maxPitch;
+        ConsecutiveLowFPSFrames++;
     }
-    
-
-    // Handle keyboard movement.
-    // This translates EyePos based on Yaw vector direction and keys pressed.
-    // Note that Pitch and Roll do not affect movement (they only affect view).
-    if (MoveForward || MoveBack || MoveLeft || MoveRight)
+    else
     {
-        Vector3f localMoveVector(0,0,0);
-        Matrix4f yawRotate = Matrix4f::RotationY(EyeYaw);
-
-        if (MoveForward)
-            localMoveVector = ForwardVector;
-        else if (MoveBack)
-            localMoveVector = -ForwardVector;
-
-        if (MoveRight)
-            localMoveVector += RightVector;
-        else if (MoveLeft)
-            localMoveVector -= RightVector;
-
-        // Normalize vector so we don't move faster diagonally.
-        localMoveVector.Normalize();
-        Vector3f orientationVector = yawRotate.Transform(localMoveVector);
-        orientationVector *= MoveSpeed * dt * (ShiftDown ? 3.0f : 1.0f);
-
-        EyePos += orientationVector;
+        ConsecutiveLowFPSFrames = 0;
     }
 
-    else if (GamepadMove.LengthSq() > 0)
+    if(ConsecutiveLowFPSFrames > 200)
     {
-        Matrix4f yawRotate = Matrix4f::RotationY(EyeYaw);
-        Vector3f orientationVector = yawRotate.Transform(GamepadMove);
-        orientationVector *= MoveSpeed * dt;
-        EyePos += orientationVector;
+        DropLOD();
+        ConsecutiveLowFPSFrames = 0;
     }
 
+    Player.EyeYaw -= Player.GamepadRotate.x * dt;
+	Player.HandleCollision(dt, &CollisionModels, &GroundCollisionModels, ShiftDown);
+
+    if(!pSensor)
+    {
+        Player.EyePitch -= Player.GamepadRotate.y * dt;
+
+        const float maxPitch = ((3.1415f / 2) * 0.98f);
+        if(Player.EyePitch > maxPitch)
+        {
+            Player.EyePitch = maxPitch;
+        }
+        if(Player.EyePitch < -maxPitch)
+        {
+            Player.EyePitch = -maxPitch;
+        }
+    }
 
     // Rotate and position View Camera, using YawPitchRoll in BodyFrame coordinates.
-    // 
-    Matrix4f rollPitchYaw = Matrix4f::RotationY(EyeYaw) * Matrix4f::RotationX(EyePitch) *
-                            Matrix4f::RotationZ(EyeRoll);
+    //
+    Matrix4f rollPitchYaw = Matrix4f::RotationY(Player.EyeYaw) * Matrix4f::RotationX(Player.EyePitch) *
+                            Matrix4f::RotationZ(Player.EyeRoll);
     Vector3f up      = rollPitchYaw.Transform(UpVector);
     Vector3f forward = rollPitchYaw.Transform(ForwardVector);
 
-    
-    // Minimal head modelling; should be moved as an option to SensorFusion.
+
+    // Minimal head modeling; should be moved as an option to SensorFusion.
     float headBaseToEyeHeight     = 0.15f;  // Vertical height of eye from base of head
     float headBaseToEyeProtrusion = 0.09f;  // Distance forward of eye from base of head
 
     Vector3f eyeCenterInHeadFrame(0.0f, headBaseToEyeHeight, -headBaseToEyeProtrusion);
-    Vector3f shiftedEyePos = EyePos + rollPitchYaw.Transform(eyeCenterInHeadFrame);
+    Vector3f shiftedEyePos = Player.EyePos + rollPitchYaw.Transform(eyeCenterInHeadFrame);
     shiftedEyePos.y -= eyeCenterInHeadFrame.y; // Bring the head back down to original height
-    View = Matrix4f::LookAtRH(shiftedEyePos, shiftedEyePos + forward, up); 
+    View = Matrix4f::LookAtRH(shiftedEyePos, shiftedEyePos + forward, up);
 
-    //  Transformation without head modelling.    
-    // View = Matrix4f::LookAtRH(EyePos, EyePos + forward, up);    
+    //  Transformation without head modeling.
+    // View = Matrix4f::LookAtRH(EyePos, EyePos + forward, up);
 
     // This is an alternative to LookAtRH:
     // Here we transpose the rotation matrix to get its inverse.
     //  View = (Matrix4f::RotationY(EyeYaw) * Matrix4f::RotationX(EyePitch) *
-    //                                        Matrix4f::RotationZ(EyeRoll)).Transposed() * 
+    //                                        Matrix4f::RotationZ(EyeRoll)).Transposed() *
     //         Matrix4f::Translation(-EyePos);
-   
+
 
     switch(SConfig.GetStereoMode())
     {
@@ -792,18 +982,17 @@ void OculusWorldDemoApp::OnIdle()
         break;
 
     case Stereo_LeftRight_Multipass:
-    //case Stereo_LeftDouble_Multipass:
+        //case Stereo_LeftDouble_Multipass:
         Render(SConfig.GetEyeRenderParams(StereoEye_Left));
         Render(SConfig.GetEyeRenderParams(StereoEye_Right));
         break;
+
     }
-     
+
     pRender->Present();
     // Force GPU to flush the scene, resulting in the lowest possible latency.
     pRender->ForceFlushGPU();
 }
-
-
 
 static const char* HelpText =
     "F1\t100 NoStereo   \t450 Ins/Del \t650 ViewOffset\n"
@@ -812,6 +1001,7 @@ static const char* HelpText =
     "F4\t100 MonoHMD    \t450 K-I L-O \t650 Distortion 5,7\n"
     "F8\t100 MSAA       \t450 Shift   \t650 Adjust Faster\n"
     "F9\t100 FullScreen \t450 F11     \t650 Fast FullScreen\n"
+	"- =\t100 Adjust Eye Pos\n"
     "R \t100 Reset SensorFusion"    
     ;
 
@@ -824,7 +1014,7 @@ enum DrawTextCenterType
     DrawText_Center  = DrawText_VCenter | DrawText_HCenter
 };
 
-static void DrawTextBox(Renderer* prender, float x, float y,
+static void DrawTextBox(RenderDevice* prender, float x, float y,
                         float textSize, const char* text,
                         DrawTextCenterType centerType = DrawText_NoCenter)
 {
@@ -834,9 +1024,13 @@ static void DrawTextBox(Renderer* prender, float x, float y,
 
     // Treat 0 a VCenter.
     if (centerType & DrawText_HCenter)
-        x = -ssize[0]/2;    
+    {
+        x = -ssize[0]/2;
+    }
     if (centerType & DrawText_VCenter)
+    {
         y = -ssize[1]/2;
+    }
 
     prender->FillRect(x-0.02f, y-0.02f, x+ssize[0]+0.02f, y+ssize[1]+0.02f, Color(40,40,100,210));
     prender->RenderText(&DejaVu, text, x, y, textSize, Color(255,255,0,210));
@@ -847,19 +1041,21 @@ void OculusWorldDemoApp::Render(const StereoRenderParams& stereo)
     pRender->BeginScene(PostProcess);
 
     // *** 3D - Configures Viewport/Projection and Render
-    stereo.Apply(pRender);
+    pRender->ApplyStereoParams(stereo);    
     pRender->Clear();
 
     pRender->SetDepthMode(true, true);
     if (SceneMode != Scene_Grid)
-        Scene.Render(pRender, stereo.ViewAdjust * View);
+    {
+        MainScene.Render(pRender, stereo.ViewAdjust * View);
+    }
 
 
-    // *** 2D Text & Grid - Configure Orthographic rendering.    
-    
+    // *** 2D Text & Grid - Configure Orthographic rendering.
+
     // Render UI in 2D orthographic coordinate system that maps [-1,1] range
     // to a readable FOV area centered at your eye and properly adjusted.
-    stereo.Apply2D(pRender);
+    pRender->ApplyStereoParams2D(stereo);    
     pRender->SetDepthMode(false, false);
 
     float unitPixel = SConfig.Get2DUnitPixel();
@@ -871,49 +1067,59 @@ void OculusWorldDemoApp::Render(const StereoRenderParams& stereo)
         GridScene.Render(pRender, Matrix4f::Translation(unitPixel,unitPixel,0));
     }
 
+    // Display Loading screen-shot in frame 0.
+    if (LoadingState != LoadingState_Finished)
+    {
+        LoadingScene.Render(pRender, Matrix4f());
+        String loadMessage = String("Loading ") + MainFilePath;
+        DrawTextBox(pRender, 0, 0.25f, textHeight, loadMessage.ToCStr(), DrawText_HCenter);
+        LoadingState = LoadingState_DoLoad;
+    }
 
-    if (AdjustMessageTimeout > pPlatform->GetAppTime())
+    if(AdjustMessageTimeout > pPlatform->GetAppTime())
     {
         DrawTextBox(pRender,0,0.5f, textHeight, AdjustMessage.ToCStr(), DrawText_HCenter);
-    }    
+    }
 
     switch(TextScreen)
     {
     case Text_Orientation:
-        {
-            char buf[256];
-            OVR_sprintf(buf, sizeof(buf),
-                        " Yaw:%4.0f  Pitch:%4.0f  Roll:%4.0f \n"
-                        " FPS: %d  Frame: %d",
-                        RadToDegree(EyeYaw), RadToDegree(EyePitch), RadToDegree(EyeRoll),
-                        FPS, FrameCounter);
+    {
+        char buf[256];
+        size_t texMemInMB = TotalTextureMemoryUsage / 1058576;
+        OVR_sprintf(buf, sizeof(buf),
+                    " Yaw:%4.0f  Pitch:%4.0f  Roll:%4.0f \n"
+                    " FPS: %d  Frame: %d \n Pos: %3.2f, %3.2f, %3.2f \n"
+                    " GPU Tex: %u MB \n EyeHeight: %3.2f",
+                    RadToDegree(Player.EyeYaw), RadToDegree(Player.EyePitch), RadToDegree(Player.EyeRoll),
+                    FPS, FrameCounter, Player.EyePos.x, Player.EyePos.y, Player.EyePos.z, texMemInMB, Player.EyePos.y);
             DrawTextBox(pRender, 0, 0.05f, textHeight, buf, DrawText_HCenter);
-        }
-        break;
+    }
+    break;
 
     case Text_Config:
-        {
-            char   textBuff[2048];
-              
-            OVR_sprintf(textBuff, sizeof(textBuff),
-                        "Fov\t300 %9.4f\n"
-                        "EyeDistance\t300 %9.4f\n"
-                        "DistortionK0\t300 %9.4f\n"
-                        "DistortionK1\t300 %9.4f\n"
-                        "DistortionK2\t300 %9.4f\n"
-                        "DistortionK3\t300 %9.4f\n"
-                        "TexScale\t300 %9.4f",
-                        SConfig.GetYFOVDegrees(),
+    {
+        char   textBuff[2048];
+
+        OVR_sprintf(textBuff, sizeof(textBuff),
+                    "Fov\t300 %9.4f\n"
+                    "EyeDistance\t300 %9.4f\n"
+                    "DistortionK0\t300 %9.4f\n"
+                    "DistortionK1\t300 %9.4f\n"
+                    "DistortionK2\t300 %9.4f\n"
+                    "DistortionK3\t300 %9.4f\n"
+                    "TexScale\t300 %9.4f",
+                    SConfig.GetYFOVDegrees(),
                         SConfig.GetIPD(),
-                        SConfig.GetDistortionK(0),
-                        SConfig.GetDistortionK(1),
-                        SConfig.GetDistortionK(2),
-                        SConfig.GetDistortionK(3),
-                        SConfig.GetDistortionScale());
-            
+                    SConfig.GetDistortionK(0),
+                    SConfig.GetDistortionK(1),
+                    SConfig.GetDistortionK(2),
+                    SConfig.GetDistortionK(3),
+                    SConfig.GetDistortionScale());
+
             DrawTextBox(pRender, 0, 0, textHeight, textBuff, DrawText_Center);
-        }
-        break;
+    }
+    break;
 
     case Text_Help:
         DrawTextBox(pRender, 0, 0, textHeight, HelpText, DrawText_Center);
@@ -931,6 +1137,7 @@ void OculusWorldDemoApp::Render(const StereoRenderParams& stereo)
     pRender->FinishScene();
 }
 
+
 // Sets temporarily displayed message for adjustments
 void OculusWorldDemoApp::SetAdjustMessage(const char* format, ...)
 {
@@ -942,7 +1149,12 @@ void OculusWorldDemoApp::SetAdjustMessage(const char* format, ...)
 
     // Message will time out in 4 seconds.
     AdjustMessage = textBuff;
-    AdjustMessageTimeout = pPlatform->GetAppTime() + 4.0f;    
+    AdjustMessageTimeout = pPlatform->GetAppTime() + 4.0f;
+}
+
+void OculusWorldDemoApp::SetAdjustMessageTimeout(float timeout)
+{
+    AdjustMessageTimeout = pPlatform->GetAppTime() + timeout;
 }
 
 // ***** View Control Adjustments
@@ -958,263 +1170,187 @@ void OculusWorldDemoApp::AdjustAspect(float dt)
 {
     float rawAspect = SConfig.GetAspect() / SConfig.GetAspectMultiplier();
     float newAspect = SConfig.GetAspect() + 0.01f * dt;
-    SConfig.SetAspectMultiplier(newAspect/rawAspect);
+    SConfig.SetAspectMultiplier(newAspect / rawAspect);
     SetAdjustMessage("Aspect: %6.3f", newAspect);
 }
 
 void OculusWorldDemoApp::AdjustDistortion(float dt, int kIndex, const char* label)
 {
-    SConfig.SetDistortionK(kIndex, SConfig.GetDistortionK(kIndex) + 0.03f * dt);   
+    SConfig.SetDistortionK(kIndex, SConfig.GetDistortionK(kIndex) + 0.03f * dt);
     SetAdjustMessage("%s: %6.4f", label, SConfig.GetDistortionK(kIndex));
 }
 
-
-//-------------------------------------------------------------------------------------
-// ***** Room Model
-
-// This model is hard-coded out of axis-aligned solid-colored slabs.
-// Room unit dimensions are in meters. Player starts in the middle.
-//
-// TBD:
-//  - Replace with high-detail textured mesh custom-designed for Rift.
-//  - Add floor boundary collision detection.
-
-enum BuiltinTexture
-{
-    Tex_None,
-    Tex_Checker,
-    Tex_Block,
-    Tex_Panel,
-    Tex_Count
-};
-
-struct Slab
-{
-    float x1, y1, z1;
-    float x2, y2, z2;
-    Color c;
-};
-
-struct SlabModel
-{
-    int   Count;
-    Slab* pSlabs;
-    BuiltinTexture tex;
-};
-
-Slab FloorSlabs[] =
-{
-    // Floor
-    { -10.0f,  -0.1f,  -20.0f,  10.0f,  0.0f, 20.1f,  Color(128,128,128) }
-};
-
-SlabModel Floor = {sizeof(FloorSlabs)/sizeof(Slab), FloorSlabs, Tex_Checker};
-
-Slab CeilingSlabs[] =
-{
-    { -10.0f,  4.0f,  -20.0f,  10.0f,  4.1f, 20.1f,  Color(128,128,128) }
-};
-
-SlabModel Ceiling = {sizeof(FloorSlabs)/sizeof(Slab), CeilingSlabs, Tex_Panel};
-
-Slab RoomSlabs[] =
-{
-    // Left Wall
-    { -10.1f,   0.0f,  -20.0f, -10.0f,  4.0f, 20.0f,  Color(128,128,128) },
-    // Back Wall
-    { -10.0f,  -0.1f,  -20.1f,  10.0f,  4.0f, -20.0f, Color(128,128,128) },
-
-    // Right Wall
-    {  10.0f,  -0.1f,  -20.0f,  10.1f,  4.0f, 20.0f,  Color(128,128,128) },
-};
-
-SlabModel Room = {sizeof(RoomSlabs)/sizeof(Slab), RoomSlabs, Tex_Block};
-
-Slab FixtureSlabs[] =
-{
-    // Right side shelf
-    {   9.5f,   0.75f,  3.0f,  10.1f,  2.5f,   3.1f,  Color(128,128,128) }, // Verticals
-    {   9.5f,   0.95f,  3.7f,  10.1f,  2.75f,  3.8f,  Color(128,128,128) },
-    {   9.5f,   1.20f,  2.5f,  10.1f,  1.30f,  3.8f,  Color(128,128,128) }, // Horizontals
-    {   9.5f,   2.00f,  3.0f,  10.1f,  2.10f,  4.2f,  Color(128,128,128) },
-
-    // Right railing    
-    {   5.0f,   1.1f,   20.0f,  10.0f,  1.2f,  20.1f, Color(128,128,128) },
-    // Bars
-    {   9.0f,   1.1f,   20.0f,   9.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {   8.0f,   1.1f,   20.0f,   8.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {   7.0f,   1.1f,   20.0f,   7.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {   6.0f,   1.1f,   20.0f,   6.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {   5.0f,   1.1f,   20.0f,   5.1f,  0.0f,  20.1f, Color(128,128,128) },
-
-    // Left railing    
-    {  -10.0f,   1.1f, 20.0f,   -5.0f,   1.2f, 20.1f, Color(128,128,128) },
-    // Bars
-    {  -9.0f,   1.1f,   20.0f,  -9.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {  -8.0f,   1.1f,   20.0f,  -8.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {  -7.0f,   1.1f,   20.0f,  -7.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {  -6.0f,   1.1f,   20.0f,  -6.1f,  0.0f,  20.1f, Color(128,128,128) },
-    {  -5.0f,   1.1f,   20.0f,  -5.1f,  0.0f,  20.1f, Color(128,128,128) },
-
-    // Bottom Floor 2
-    { -15.0f,  -6.1f,   18.0f,  15.0f, -6.0f, 30.0f,  Color(128,128,128) },
-};
-
-SlabModel Fixtures = {sizeof(FixtureSlabs)/sizeof(Slab), FixtureSlabs};
-
-Slab FurnitureSlabs[] =
-{
-    // Table
-    {  -1.8f, 0.7f, 1.0f,  0.0f,      0.8f, 0.0f,      Color(128,128,88) },
-    {  -1.8f, 0.7f, 0.0f, -1.8f+0.1f, 0.0f, 0.0f+0.1f, Color(128,128,88) }, // Leg 1
-    {  -1.8f, 0.7f, 1.0f, -1.8f+0.1f, 0.0f, 1.0f-0.1f, Color(128,128,88) }, // Leg 2
-    {   0.0f, 0.7f, 1.0f,  0.0f-0.1f, 0.0f, 1.0f-0.1f, Color(128,128,88) }, // Leg 2
-    {   0.0f, 0.7f, 0.0f,  0.0f-0.1f, 0.0f, 0.0f+0.1f, Color(128,128,88) }, // Leg 2
-
-    // Chair
-    {  -1.4f, 0.5f, -1.1f, -0.8f,       0.55f, -0.5f,       Color(88,88,128) }, // Set
-    {  -1.4f, 1.0f, -1.1f, -1.4f+0.06f, 0.0f,  -1.1f+0.06f, Color(88,88,128) }, // Leg 1
-    {  -1.4f, 0.5f, -0.5f, -1.4f+0.06f, 0.0f,  -0.5f-0.06f, Color(88,88,128) }, // Leg 2
-    {  -0.8f, 0.5f, -0.5f, -0.8f-0.06f, 0.0f,  -0.5f-0.06f, Color(88,88,128) }, // Leg 2
-    {  -0.8f, 1.0f, -1.1f, -0.8f-0.06f, 0.0f,  -1.1f+0.06f, Color(88,88,128) }, // Leg 2
-    {  -1.4f, 0.97f,-1.05f,-0.8f,       0.92f, -1.10f,      Color(88,88,128) }, // Back high bar
-};
-
-SlabModel Furniture = {sizeof(FurnitureSlabs)/sizeof(Slab), FurnitureSlabs};
-
-Slab PostsSlabs[] = 
-{
-    // Posts
-    {  0,  0.0f, 0.0f,   0.1f, 1.3f, 0.1f, Color(128,128,128) },
-    {  0,  0.0f, 0.4f,   0.1f, 1.3f, 0.5f, Color(128,128,128) },
-    {  0,  0.0f, 0.8f,   0.1f, 1.3f, 0.9f, Color(128,128,128) },
-    {  0,  0.0f, 1.2f,   0.1f, 1.3f, 1.3f, Color(128,128,128) },
-    {  0,  0.0f, 1.6f,   0.1f, 1.3f, 1.7f, Color(128,128,128) },
-    {  0,  0.0f, 2.0f,   0.1f, 1.3f, 2.1f, Color(128,128,128) },
-    {  0,  0.0f, 2.4f,   0.1f, 1.3f, 2.5f, Color(128,128,128) },
-    {  0,  0.0f, 2.8f,   0.1f, 1.3f, 2.9f, Color(128,128,128) },
-    {  0,  0.0f, 3.2f,   0.1f, 1.3f, 3.3f, Color(128,128,128) },
-    {  0,  0.0f, 3.6f,   0.1f, 1.3f, 3.7f, Color(128,128,128) },
-};
-
-SlabModel Posts = {sizeof(PostsSlabs)/sizeof(Slab), PostsSlabs};
-
-
-// Helper function to create a model out of Slab arrays.
-Model* OculusWorldDemoApp::CreateModel(Vector3f pos, SlabModel* sm)
-{
-    Model* m = new Model(Prim_Triangles);
-    m->SetPosition(pos);
-
-    for(int i=0; i< sm->Count; i++)
+// Loads the scene data
+void OculusWorldDemoApp::PopulateScene(const char *fileName)
+{    
+    XmlHandler xmlHandler;     
+    TotalTextureMemoryUsage = 0;   
+    if(!xmlHandler.ReadFile(fileName, pRender, &MainScene, &CollisionModels, &GroundCollisionModels, TotalTextureMemoryUsage))
     {
-        Slab &s = sm->pSlabs[i];
-        m->AddSolidColorBox(s.x1, s.y1, s.z1, s.x2, s.y2, s.z2, s.c);
-    }
+        SetAdjustMessage("---------------------------------\nFILE LOAD FAILED\n---------------------------------");
+        SetAdjustMessageTimeout(10.0f);
+    }    
 
-    if (sm->tex > 0)
-        m->Fill = LitTextures[sm->tex];
-    else
-        m->Fill = LitSolid;
-    return m;
-}
-
-// Adds room model to the scene.
-void OculusWorldDemoApp::PopulateScene()
-{
-    Ptr<Texture> BuiltinTextures[Tex_Count];
-
-    // Create floor checkerboard texture.
-    {
-        Color checker[256*256];
-        for (int j = 0; j < 256; j++)
-            for (int i = 0; i < 256; i++)
-                checker[j*256+i] = (((i/4 >> 5) ^ (j/4 >> 5)) & 1) ?
-                                  Color(180,180,180,255) : Color(80,80,80,255);
-        BuiltinTextures[Tex_Checker] = *pRender->CreateTexture(Texture_RGBA|Texture_GenMipmaps, 256, 256, checker);
-        BuiltinTextures[Tex_Checker]->SetSampleMode(Sample_Anisotropic|Sample_Repeat);
-    }
-
-    // Ceiling panel texture.
-    {
-        Color panel[256*256];
-        for (int j = 0; j < 256; j++)
-            for (int i = 0; i < 256; i++)
-                panel[j*256+i] = (i/4 == 0 || j/4 == 0) ?
-                    Color(80,80,80,255) : Color(180,180,180,255);
-        BuiltinTextures[Tex_Panel] = *pRender->CreateTexture(Texture_RGBA|Texture_GenMipmaps, 256, 256, panel);
-        BuiltinTextures[Tex_Panel]->SetSampleMode(Sample_Anisotropic|Sample_Repeat);
-    }
-
-    // Wall brick textures.
-    {
-        Color block[256*256];
-        for (int j = 0; j < 256; j++)
-            for (int i = 0; i < 256; i++)
-                block[j*256+i] = ((j/4 & 15) == 0) || ((i/4 & 15) == 0) && ((((i/4 & 31) == 0) ^ ((j/4 >> 4) & 1)) == 0) ?
-                                Color(60,60,60,255) : Color(180,180,180,255);
-        BuiltinTextures[Tex_Block] = *pRender->CreateTexture(Texture_RGBA|Texture_GenMipmaps, 256, 256, block);
-        BuiltinTextures[Tex_Block]->SetSampleMode(Sample_Anisotropic|Sample_Repeat);
-    }
-
-    LitSolid = *new ShaderFill(*pRender->CreateShaderSet());
-    LitSolid->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Vertex, VShader_MVP)); 
-    LitSolid->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Fragment, FShader_LitGouraud)); 
-
-    for (int i = 1; i < Tex_Count; i++)
-    {
-        LitTextures[i] = *new ShaderFill(*pRender->CreateShaderSet());
-        LitTextures[i]->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Vertex, VShader_MVP)); 
-        LitTextures[i]->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Fragment, FShader_LitTexture)); 
-        LitTextures[i]->SetTexture(0, BuiltinTextures[i]);
-    }
-
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(0,0,0),  &Room)));
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(0,0,0),  &Floor)));
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(0,0,0),  &Ceiling)));
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(0,0,0),  &Fixtures)));
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(0,0,0),  &Furniture)));
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(0,0,4),  &Furniture)));
-    Scene.World.Add(Ptr<Model>(*CreateModel(Vector3f(-3,0,3), &Posts)));
+    MainScene.SetAmbient(Vector4f(1.0f, 1.0f, 1.0f, 1.0f));
     
-    Ptr<File> ImageFile = *new SysFile("image.tga");
-    Ptr<Texture> ImageTex;
-    if (ImageFile->IsValid())
-        ImageTex = *LoadTextureTga(pRender, ImageFile);
-    if (ImageTex)
-    {
-        ImageTex->SetSampleMode(Sample_Anisotropic|Sample_Repeat);
-        Ptr<Model> m = *new Model(Prim_Triangles);
-        m->SetPosition(Vector3f(-9.98f, 1.0f, 0.0f));
-        m->AddVertex(0, -0.2f,  1.0f, Color(255,255,255,255), 0, 0, 0,0,-1);
-        m->AddVertex(0,  1.8f,  1.0f, Color(255,255,255,255), 0, 1, 0,0,-1);
-        m->AddVertex(0,  1.8f, -1.0f, Color(255,255,255,255), 1, 1, 0,0,-1);
-        m->AddVertex(0, -0.2f, -1.0f, Color(255,255,255,255), 1, 0, 0,0,-1);
-        m->AddTriangle(0,1,2);
-        m->AddTriangle(2,3,0);
-
-        Ptr<ShaderFill> fill = *new ShaderFill(*pRender->CreateShaderSet());
-        fill->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Vertex, VShader_MVP)); 
-        fill->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Fragment, FShader_LitTexture)); 
-        fill->SetTexture(0, ImageTex);
-        m->Fill = fill;
-
-        Scene.World.Add(m);
-    }
-
-    Scene.SetAmbient(Vector4f(0.65f,0.65f,0.65f,1));
-    Scene.AddLight(Vector3f(-2,4,-2), Vector4f(8,8,8,1));
-    Scene.AddLight(Vector3f(3,4,-3),  Vector4f(2,1,1,1));
-    Scene.AddLight(Vector3f(-4,3,25), Vector4f(3,6,3,1));
-
-
-    // Distortion debug grid (brought up by 'G' key). 
+    // Distortion debug grid (brought up by 'G' key).
     Ptr<Model> gridModel = *Model::CreateGrid(Vector3f(0,0,0), Vector3f(1.0f/10, 0,0), Vector3f(0,1.0f/10,0),
                                               10, 10, 5, 
                                               Color(0, 255, 0, 255), Color(255, 50, 50, 255) );
     GridScene.World.Add(gridModel);
 }
 
+
+void OculusWorldDemoApp::PopulatePreloadScene()
+{
+    // Load-screen screen shot image
+    String fileName = MainFilePath;
+    fileName.StripExtension();
+
+    Ptr<File>    imageFile = *new SysFile(fileName + "_LoadScreen.tga");
+    Ptr<Texture> imageTex;
+    if (imageFile->IsValid())
+        imageTex = *LoadTextureTga(pRender, imageFile);
+
+    // Image is rendered as a single quad.
+    if (imageTex)
+    {
+        imageTex->SetSampleMode(Sample_Anisotropic|Sample_Repeat);
+        Ptr<Model> m = *new Model(Prim_Triangles);        
+        m->AddVertex(-0.5f,  0.5f,  0.0f, Color(255,255,255,255), 0.0f, 0.0f);
+        m->AddVertex( 0.5f,  0.5f,  0.0f, Color(255,255,255,255), 1.0f, 0.0f);
+        m->AddVertex( 0.5f, -0.5f,  0.0f, Color(255,255,255,255), 1.0f, 1.0f);
+        m->AddVertex(-0.5f, -0.5f,  0.0f, Color(255,255,255,255), 0.0f, 1.0f);
+        m->AddTriangle(2,1,0);
+        m->AddTriangle(0,3,2);
+
+        Ptr<ShaderFill> fill = *new ShaderFill(*pRender->CreateShaderSet());
+        fill->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Vertex, VShader_MVP)); 
+        fill->GetShaders()->SetShader(pRender->LoadBuiltinShader(Shader_Fragment, FShader_Texture)); 
+        fill->SetTexture(0, imageTex);
+        m->Fill = fill;
+
+        LoadingScene.World.Add(m);
+    }
+}
+
+void OculusWorldDemoApp::ClearScene()
+{
+    MainScene.Clear();
+    GridScene.Clear();
+}
+
+void OculusWorldDemoApp::PopulateLODFileNames()
+{
+    //OVR::String mainFilePath = MainFilePath;
+    LODFilePaths.PushBack(MainFilePath);
+    int   LODIndex = 1;
+    SPInt pos = strcspn(MainFilePath.ToCStr(), ".");
+    SPInt len = strlen(MainFilePath.ToCStr());
+    SPInt diff = len - pos;
+
+    if (diff == 0)
+        return;    
+
+    while(true)
+    {
+        char pathWithoutExt[250];
+        char buffer[250];
+        for(SPInt i = 0; i < pos; ++i)
+        {
+            pathWithoutExt[i] = MainFilePath[(int)i];
+        }
+        pathWithoutExt[pos] = '\0';
+        OVR_sprintf(buffer, sizeof(buffer), "%s%i.xml", pathWithoutExt, LODIndex);
+        FILE* fp = 0;
+#if defined(_MSC_VER) && (_MSC_VER >= 1400 )
+        errno_t err = fopen_s(&fp, buffer, "rb");
+        if(!fp || err)
+        {
+#else
+        fp = fopen(buffer, "rb");
+        if(!fp)
+        {
+#endif
+            break;
+        }
+        fclose(fp);
+        OVR::String result = buffer;
+        LODFilePaths.PushBack(result);
+        LODIndex++;
+    }
+}
+
+void OculusWorldDemoApp::DropLOD()
+{
+    if(CurrentLODFileIndex < (int)(LODFilePaths.GetSize() - 1))
+    {
+        ClearScene();
+        CurrentLODFileIndex++;
+        PopulateScene(LODFilePaths[CurrentLODFileIndex].ToCStr());
+    }
+}
+
+void OculusWorldDemoApp::RaiseLOD()
+{
+    if(CurrentLODFileIndex > 0)
+    {
+        ClearScene();
+        CurrentLODFileIndex--;
+        PopulateScene(LODFilePaths[CurrentLODFileIndex].ToCStr());
+    }
+}
+
+//-----------------------------------------------------------------------------
+void OculusWorldDemoApp::CycleDisplay()
+{
+    int screenCount = pPlatform->GetScreenCount();
+
+    // If Windowed, switch to the HMD screen first in Full-Screen Mode.
+    // If already Full-Screen, cycle to next screen until we reach FirstScreenInCycle.
+
+    if (pRender->IsFullscreen())
+    {
+        // Right now, we always need to restore window before going to next screen.
+        pPlatform->SetFullscreen(RenderParams, Display_Window);
+
+        Screen++;
+        if (Screen == screenCount)
+            Screen = 0;
+
+        RenderParams.MonitorName = pPlatform->GetScreenName(Screen);
+
+        if (Screen != FirstScreenInCycle)
+        {
+            pRender->SetParams(RenderParams);
+            pPlatform->SetFullscreen(RenderParams, Display_Fullscreen);
+        }
+    }
+    else
+    {
+        // Try to find HMD Screen, making it the first screen in full-screen Cycle.        
+        FirstScreenInCycle = 0;
+        if (pHMD)
+        {   
+            for (int i = 0; i< screenCount; i++)
+            {   
+                String screenName = pPlatform->GetScreenName(i);
+                // Under Windows, diplay (screenName )is a part of the full monitor string
+                if (strstr(SConfig.GetHMDInfo().DisplayDeviceName, screenName))
+                {
+                    FirstScreenInCycle = i;
+                    break;
+                }
+            }            
+        }
+
+        // Switch full-screen on the HMD.
+        Screen = FirstScreenInCycle;
+        RenderParams.MonitorName = pPlatform->GetScreenName(Screen);
+        pRender->SetParams(RenderParams);
+        pPlatform->SetFullscreen(RenderParams, Display_Fullscreen);
+    }
+}
 
 //-------------------------------------------------------------------------------------
 

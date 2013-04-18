@@ -161,23 +161,23 @@ private:
 
 // These functions will output text to global log with semantics described by
 // their LogMessageType.
-void LogText(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(2,3);
-void LogError(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(2,3);
+void LogText(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(1,2);
+void LogError(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(1,2);
 
 #ifdef OVR_BUILD_DEBUG
 
     // Debug build only logging.
-    void LogDebugText(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(2,3);
-    void LogDebug(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(2,3);
-    void LogAssert(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(2,3);
+    void LogDebugText(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(1,2);
+    void LogDebug(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(1,2);
+    void LogAssert(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(1,2);
 
     // Macro to do debug logging, printf-style.
     // An extra set of set of parenthesis must be used around arguments,
     // as in: OVR_LOG_DEBUG(("Value %d", 2)).
-    #define OVR_DEBUG_LOG(args)       do { OVR::LogDebug##args; } while(0)
-    #define OVR_DEBUG_LOG_TEXT(args)  do { OVR::LogDebugText##args; } while(0)
+    #define OVR_DEBUG_LOG(args)       do { OVR::LogDebug args; } while(0)
+    #define OVR_DEBUG_LOG_TEXT(args)  do { OVR::LogDebugText args; } while(0)
 
-    #define OVR_ASSERT_LOG(c, args)   do { if (!(c)) { OVR::LogAssert##args; OVR_DEBUG_BREAK; } } while(0)
+    #define OVR_ASSERT_LOG(c, args)   do { if (!(c)) { OVR::LogAssert args; OVR_DEBUG_BREAK; } } while(0)
 
 #else
 

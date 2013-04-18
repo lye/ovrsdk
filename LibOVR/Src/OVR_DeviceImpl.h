@@ -139,15 +139,32 @@ public:
 
     // *** Device creation/matching Interface
 
+
     // Cloning copies us to an allocated object when new device is enumerated.
     virtual DeviceCreateDesc* Clone() const = 0;
     // Creates a new device instance without Initializing it; the
     // later is done my Initialize()/Shutdown() methods of the device itself.
     virtual DeviceBase*       NewDeviceInstance() = 0;
-    // Override to return 'true' if descriptor matches our device.
-    virtual bool              MatchDevice(const DeviceCreateDesc& other) const = 0;
     // Override to return device-specific info.
     virtual bool              GetDeviceInfo(DeviceInfo* info) const = 0;
+
+
+    enum MatchResult
+    {
+        Match_None,
+        Match_Found,
+        Match_Candidate
+    };
+
+    // Override to return Match_Found if descriptor matches our device.
+    // Match_Candidate can be returned, with pcandicate update, if this may be a match
+    // but more searching is necessary. If this is the case UpdateMatchedCandidate will be called.
+    virtual MatchResult       MatchDevice(const DeviceCreateDesc& other,
+                                          DeviceCreateDesc** pcandidate) const = 0;
+    // Called for matched candidate after all potential matches are iterated.
+    // Used to update HMDevice creation arguments from Sensor.
+    // Return 'false' to create new object, 'true' if done with this argument.
+    virtual bool              UpdateMatchedCandidate(const DeviceCreateDesc&) { return false; }
 
 
 //protected:
@@ -211,7 +228,11 @@ public:
     }
 
     // Convenience method to avoid manager access typecasts.
-    DeviceManagerImpl*  GetManagerImpl() const      { return pLock->GetManagerImpl();  }
+    DeviceManagerImpl*  GetManagerImpl() const      
+    {
+        return pCreateDesc->pLock->pManager;
+    }
+
     // Inline to avoid warnings.
     DeviceImpl*         getThis()                   { return this; }
 
@@ -336,13 +357,13 @@ public:
 
     // Background-thread callbacks for DeviceCreation/Release. These
     DeviceBase* CreateDevice_MgrThread(DeviceCreateDesc* createDesc, DeviceBase* parent = 0);
-    void        ReleaseDevice_MgrThread(DeviceBase* device);
+    Void        ReleaseDevice_MgrThread(DeviceBase* device);
 
    
     // Calls EnumerateDevices() on all factories
-    virtual void EnumerateAllFactoryDevices();
+    virtual Void EnumerateAllFactoryDevices();
     // Enumerates devices for a particular factory.
-    virtual void EnumerateFactoryDevices(DeviceFactory* factory);
+    virtual Void EnumerateFactoryDevices(DeviceFactory* factory);
     
     // Manager Lock-protected list of devices.
     List<DeviceCreateDesc> Devices;    

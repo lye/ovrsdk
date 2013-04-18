@@ -56,13 +56,17 @@ public:
 
     virtual DeviceBase* NewDeviceInstance();
 
-    virtual bool MatchDevice(const DeviceCreateDesc& other) const
+    virtual MatchResult MatchDevice(const DeviceCreateDesc& other,
+                                    DeviceCreateDesc**) const
     {
-        if (other.Type != Device_Sensor)
-            return false;
-        const SensorDeviceCreateDesc& s2 = (const SensorDeviceCreateDesc&) other;
-        return (HIDDesc.Path == s2.HIDDesc.Path) &&
-               (HIDDesc.SerialNumber == s2.HIDDesc.SerialNumber);
+        if ((other.Type == Device_Sensor) && (pFactory == other.pFactory))
+        {
+            const SensorDeviceCreateDesc& s2 = (const SensorDeviceCreateDesc&) other;
+            if ((HIDDesc.Path == s2.HIDDesc.Path) &&
+                (HIDDesc.SerialNumber == s2.HIDDesc.SerialNumber))
+                return Match_Found;
+        }
+        return Match_None;
     }
 
     virtual bool        GetDeviceInfo(DeviceInfo* info) const;
@@ -129,7 +133,7 @@ protected:
         }
     };
 
-    void    setCoordinateFrame(CoordinateFrame coordframe);
+    Void    setCoordinateFrame(CoordinateFrame coordframe);
     bool    setRange(const SensorRange& range);
     bool    setFeature(const WriteData& data);
     bool    getFeature(UByte* data, UPInt size);

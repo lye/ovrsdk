@@ -151,7 +151,7 @@ Log* Log::GetDefaultLog()
 // ***** Global Logging functions
 
 #define OVR_LOG_FUNCTION_IMPL(Name)  \
-    void Log##Name(const char* fmt, ...) OVR_LOG_VAARG_ATTRIBUTE(2,3) \
+    void Log##Name(const char* fmt, ...) \
     {                                                                    \
         if (OVR_GlobalLog)                                               \
         {                                                                \

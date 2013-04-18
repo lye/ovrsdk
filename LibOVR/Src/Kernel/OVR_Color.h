@@ -24,10 +24,14 @@ struct ColorRGB
 {
     UByte R,G,B;
 
-    ColorRGB() {}
+    ColorRGB()
+     :  R(0), G(0), B(0)  
+    {}
+
     // Constructs color by channel.
     ColorRGB(UByte r, UByte g, UByte b)
-        : R(r), G(g), B(b) { }
+     :  R(r), G(g), B(b) 
+    { }
     
     bool operator==(const ColorRGB& b) const
     {

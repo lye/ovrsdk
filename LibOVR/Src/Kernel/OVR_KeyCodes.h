@@ -68,7 +68,7 @@ enum KeyCode
     Key_Num9,
 
     // Numeric keypad.
-    Key_KP_0            = 96,
+    Key_KP_0            = 0xa0,
     Key_KP_1,
     Key_KP_2,
     Key_KP_3,
@@ -86,7 +86,7 @@ enum KeyCode
     Key_KP_Divide,
     
     // Function keys.
-    Key_F1              = 112,
+    Key_F1              = 0xb0,
     Key_F2,
     Key_F3,
     Key_F4,
@@ -114,37 +114,39 @@ enum KeyCode
     Key_CapsLock        = 20, // Toggle
     Key_Escape          = 27,
     Key_Space           = 32,
-    Key_PageUp,
+    Key_Quote           = 39,
+    Key_PageUp          = 0xc0,
     Key_PageDown,
-    Key_End             = 35,
+    Key_End,
     Key_Home,
     Key_Left,
     Key_Up,
     Key_Right,
     Key_Down,
-    Key_Insert          = 45,
+    Key_Insert,
     Key_Delete,
     Key_Help,
-
+    
+    Key_Comma           = 44,
+    Key_Minus,
+    Key_Slash           = 47,
+    Key_Period,
     Key_NumLock         = 144, // Toggle
     Key_ScrollLock      = 145, // Toggle
     
-    Key_Semicolon       = 186,
-    Key_Equal           = 187,
-    Key_Comma           = 188, // Platform specific?
-    Key_Minus           = 189,
-    Key_Period          = 190, // Platform specific?
-    Key_Slash           = 191,
+    Key_Semicolon       = 59,
+    Key_Equal           = 61,
     Key_Bar             = 192,
-    Key_BracketLeft     = 219,
-    Key_Backslash       = 220,
-    Key_BracketRight    = 221,
-    Key_Quote           = 222,
+    Key_BracketLeft     = 91,
+    Key_Backslash,
+    Key_BracketRight,
 
     Key_OEM_AX          = 0xE1,  //  'AX' key on Japanese AX keyboard
     Key_OEM_102         = 0xE2,  //  "<>" or "\|" on RT 102-key keyboard.
     Key_ICO_HELP        = 0xE3,  //  Help key on ICO
     Key_ICO_00          = 0xE4,  //  00 key on ICO
+
+    Key_Meta,
 
     // Total number of keys.
     Key_CodeCount
@@ -161,9 +163,10 @@ public:
         Key_ShiftPressed    = 0x01,
         Key_CtrlPressed     = 0x02,
         Key_AltPressed      = 0x04,
-        Key_CapsToggled     = 0x08,
-        Key_NumToggled      = 0x10,
-        Key_ScrollToggled   = 0x20,
+        Key_MetaPressed     = 0x08,
+        Key_CapsToggled     = 0x10,
+        Key_NumToggled      = 0x20,
+        Key_ScrollToggled   = 0x40,
 
         Initialized_Bit     = 0x80,
         Initialized_Mask    = 0xFF
@@ -171,13 +174,14 @@ public:
     unsigned char States;
 
     KeyModifiers() : States(0) { }
-    KeyModifiers(unsigned char st) : States(unsigned char(st | Initialized_Bit)) { }
+        KeyModifiers(unsigned char st) : States((unsigned char)(st | Initialized_Bit)) { }
 
     void Reset() { States = 0; }
 
     bool IsShiftPressed() const { return (States & Key_ShiftPressed) != 0; }
     bool IsCtrlPressed() const  { return (States & Key_CtrlPressed) != 0; }
     bool IsAltPressed() const   { return (States & Key_AltPressed) != 0; }
+    bool IsMetaPressed() const  { return (States & Key_MetaPressed) != 0; }
     bool IsCapsToggled() const  { return (States & Key_CapsToggled) != 0; }
     bool IsNumToggled() const   { return (States & Key_NumToggled) != 0; }
     bool IsScrollToggled() const{ return (States & Key_ScrollToggled) != 0; }
@@ -185,6 +189,7 @@ public:
     void SetShiftPressed(bool v = true)  { (v) ? States |= Key_ShiftPressed : States &= ~Key_ShiftPressed; }
     void SetCtrlPressed(bool v = true)   { (v) ? States |= Key_CtrlPressed  : States &= ~Key_CtrlPressed; }
     void SetAltPressed(bool v = true)    { (v) ? States |= Key_AltPressed   : States &= ~Key_AltPressed; }
+    void SetMetaPressed(bool v = true)   { (v) ? States |= Key_MetaPressed  : States &= ~Key_MetaPressed; }
     void SetCapsToggled(bool v = true)   { (v) ? States |= Key_CapsToggled  : States &= ~Key_CapsToggled; }
     void SetNumToggled(bool v = true)    { (v) ? States |= Key_NumToggled   : States &= ~Key_NumToggled; }
     void SetScrollToggled(bool v = true) { (v) ? States |= Key_ScrollToggled: States &= ~Key_ScrollToggled; }

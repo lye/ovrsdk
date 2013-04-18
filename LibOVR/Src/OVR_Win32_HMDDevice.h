@@ -27,7 +27,7 @@ class HMDDevice;
 
 // HMDDeviceFactory enumerates attached Oculus HMD devices.
 //
-// This is currently done by matching montior device strings.
+// This is currently done by matching monitor device strings.
 
 class HMDDeviceFactory : public DeviceFactory
 {
@@ -45,17 +45,25 @@ protected:
 class HMDDeviceCreateDesc : public DeviceCreateDesc
 {
     friend class HMDDevice;
+
+protected:
+    enum
+    {
+        Contents_Screen     = 1,
+        Contents_Distortion = 2,
+    };
+    String      DeviceId;
+    String      DisplayDeviceName;
+    int         DesktopX, DesktopY;
+    unsigned    Contents;
+    unsigned    HResolution, VResolution;
+    float       HScreenSize, VScreenSize;
+    float       DistortionK[4];
+
 public:
     HMDDeviceCreateDesc(DeviceFactory* factory, 
-                        const String& deviceId, const String& displayDeviceName)
-        : DeviceCreateDesc(factory, Device_HMD),
-          DeviceId(deviceId), DisplayDeviceName(displayDeviceName),
-          HResolution(0), VResolution(0), HScreenSize(0), VScreenSize(0) { }
-    HMDDeviceCreateDesc(const HMDDeviceCreateDesc& other)
-        : DeviceCreateDesc(other.pFactory, Device_HMD),
-          DeviceId(other.DeviceId), DisplayDeviceName(other.DisplayDeviceName), 
-          HResolution(other.HResolution), VResolution(other.VResolution),
-          HScreenSize(other.HScreenSize), VScreenSize(other.VScreenSize) { }
+                        const String& deviceId, const String& displayDeviceName);
+    HMDDeviceCreateDesc(const HMDDeviceCreateDesc& other);
 
     virtual DeviceCreateDesc* Clone() const
     {
@@ -64,32 +72,31 @@ public:
 
     virtual DeviceBase* NewDeviceInstance();
 
-    virtual bool MatchDevice(const DeviceCreateDesc& other) const
-    {
-        if (other.Type != Device_HMD)
-            return false;
-        const HMDDeviceCreateDesc& s2 = (const HMDDeviceCreateDesc&) other;
-        return (DeviceId == s2.DeviceId) &&
-               (DisplayDeviceName == s2.DisplayDeviceName);
-    }
+    virtual MatchResult MatchDevice(const DeviceCreateDesc& other,
+                                    DeviceCreateDesc**) const;
+
+    virtual bool        UpdateMatchedCandidate(const DeviceCreateDesc&);
 
     virtual bool GetDeviceInfo(DeviceInfo* info) const;
 
-    void  SetScreenParameters(unsigned hres, unsigned vres, float hsize, float vsize)
+    void  SetScreenParameters(int x, int y, unsigned hres, unsigned vres, float hsize, float vsize)
     {
+        DesktopX = x;
+        DesktopY = y;
         HResolution = hres;
         VResolution = vres;
         HScreenSize = hsize;
         VScreenSize = vsize;
+        Contents |= Contents_Screen;
+    }
+    void SetDistortion(const float* dks)
+    {
+        for (int i = 0; i < 4; i++)
+            DistortionK[i] = dks[i];
+        Contents |= Contents_Distortion;
     }
 
     bool IsSLA1() const;
-
-protected:
-    String      DeviceId;
-    String      DisplayDeviceName;
-    unsigned    HResolution, VResolution;
-    float       HScreenSize, VScreenSize;
 };
 
 

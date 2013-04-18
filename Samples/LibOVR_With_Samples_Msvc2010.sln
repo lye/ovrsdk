@@ -12,6 +12,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SensorBoxTest", "SensorBox\
 		{934B40C7-F40A-4E4C-97A7-B9659BE0A441} = {934B40C7-F40A-4E4C-97A7-B9659BE0A441}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "OculusRoomTiny", "OculusRoomTiny\OculusRoomTiny_Msvc2010.vcxproj", "{80523489-2881-4F64-8C3B-FAF88B60ABCD}"
+	ProjectSection(ProjectDependencies) = postProject
+		{934B40C7-F40A-4E4C-97A7-B9659BE0A441} = {934B40C7-F40A-4E4C-97A7-B9659BE0A441}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Win32 = Debug|Win32
@@ -41,6 +46,14 @@ Global
 		{8051B837-2982-4F64-8C3B-FAF88B6D83AB}.Release|Win32.ActiveCfg = Release|Win32
 		{8051B837-2982-4F64-8C3B-FAF88B6D83AB}.Release|Win32.Build.0 = Release|Win32
 		{8051B837-2982-4F64-8C3B-FAF88B6D83AB}.Release|x64.ActiveCfg = Release|Win32
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Debug|Win32.ActiveCfg = Debug|Win32
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Debug|Win32.Build.0 = Debug|Win32
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Debug|x64.ActiveCfg = Debug|x64
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Debug|x64.Build.0 = Debug|x64
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Release|Win32.ActiveCfg = Release|Win32
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Release|Win32.Build.0 = Release|Win32
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Release|x64.ActiveCfg = Release|x64
+		{80523489-2881-4F64-8C3B-FAF88B60ABCD}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

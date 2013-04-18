@@ -1,6 +1,6 @@
 /************************************************************************************
 
-PublicHeader:   None
+PublicHeader:   OVR
 Filename    :   OVR_List.h
 Content     :   Template implementation for doubly-connected linked List
 Created     :   September 19, 2012
@@ -12,7 +12,7 @@ Use of this software is subject to the terms of the Oculus license
 agreement provided at the time of installation or download, or which
 otherwise accompanies this software in either electronic or hard copy form.
 
-/************************************************************************************/
+************************************************************************************/
 
 #ifndef OVR_List_h
 #define OVR_List_h

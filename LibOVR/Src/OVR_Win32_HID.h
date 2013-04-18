@@ -101,7 +101,7 @@ public:
 
     // Override to get notified about available device. Will only be called for
     // devices that matched MatchVendorProduct.
-    virtual void Visit(const HIDDeviceDesc&) { }
+    virtual void Visit(HANDLE hidDev, const HIDDeviceDesc&) { OVR_UNUSED(hidDev); }
 };
 
 

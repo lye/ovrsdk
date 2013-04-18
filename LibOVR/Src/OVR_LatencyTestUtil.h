@@ -19,6 +19,9 @@ otherwise accompanies this software in either electronic or hard copy form.
 
 #include "OVR_Device.h"
 
+#include "Kernel/OVR_String.h"
+#include "Kernel/OVR_List.h"
+
 namespace OVR {
 
 
@@ -27,9 +30,7 @@ namespace OVR {
 //
 // LatencyTestUtil wraps the low level LatencyTestDevice and manages the scheduling
 // of a latency test. A single test is composed of a series of individual latency measurements
-// which are used to derive min, max, and an average latency value. This is necessary since
-// individual latency measurements naturally exhibit random variation up to 16mS based on
-// how they interact with the display scan.
+// which are used to derive min, max, and an average latency value.
 //
 // Developers are required to call the following methods:
 //      SetDevice - Sets the LatencyTestDevice to be used for the tests.
@@ -44,6 +45,11 @@ namespace OVR {
 //                              such that it doesn't significantly impact the rendering of the scene,
 //                              but large enough to be 'seen' by the sensor. See the SDK
 //                              documentation for more information.
+//		GetResultsString -	Call this to get a string containing the most recent results.
+//							If the string has already been gotten then NULL will be returned.
+//							The string pointer will remain valid until the next time this 
+//							method is called.
+//
 
 class LatencyTestUtil : public NewOverrideBase
 {
@@ -54,7 +60,6 @@ public:
     // Set the Latency Tester device that we'll use to send commands to and receive
     // notification messages from.
     bool        SetDevice(LatencyTestDevice* device);
-    void        SetNumberOfSamples(UInt32 numberOfSamples);
 
     // Returns true if this LatencyTestUtil has a Latency Tester device.
     bool        HasDevice() const
@@ -62,11 +67,22 @@ public:
 
     void        ProcessInputs();
     bool        DisplayScreenColor(ColorRGB& colorToDisplay);
+	const char*	GetResultsString();
 
 private:
     LatencyTestUtil* getThis()  { return this; }
+
+    enum LatencyTestMessageType
+    {
+        LatencyTest_None,
+        LatencyTest_Timer,
+        LatencyTest_ProcessInputs,
+    };
     
-    void handleMessage(const Message& msg);
+    void handleMessage(const Message& msg, LatencyTestMessageType latencyTestMessage = LatencyTest_None);
+    void reset();
+    void setTimer(UInt32 timeMilliS);
+    void clearTimer();
 
     class LatencyTestHandler : public MessageHandler
     {
@@ -78,30 +94,60 @@ private:
         virtual void OnMessage(const Message& msg);
     };
 
-    void TransitionToWaitingForStartColorToSettle();
-    void TransitionToWaitingForChangeColorSignal();
-    void ProcessResults();
-    void UpdateForTimeouts();
+    bool areResultsComplete();
+    void processResults();
+    void updateForTimeouts();
 
-    Ptr<LatencyTestDevice>    Device;
-    UInt32                      NumberOfSamples;
-
-    LatencyTestHandler        Handler;
+    Ptr<LatencyTestDevice>      Device;
+    LatencyTestHandler          Handler;
 
     enum TesterState
     {
-        State_Default,
-        State_WaitingForStartColorToSettle,
-        Scene_WaitingForChangeColorSignal,
-        Scene_WaitingForColorDetectedSignal
+        State_WaitingForButton,
+        State_WaitingForSettlePreCalibrationColorBlack,
+        State_WaitingForSettlePostCalibrationColorBlack,
+        State_WaitingForSettlePreCalibrationColorWhite,
+        State_WaitingForSettlePostCalibrationColorWhite,
+        State_WaitingToTakeMeasurement,
+        State_WaitingForTestStarted,
+        State_WaitingForColorDetected,
+        State_WaitingForSettlePostMeasurement
     };
-    TesterState             State;
+    TesterState                 State;
 
-    UInt32                  ActiveTimerMillis;
-    ColorRGB                RenderColorSignalled;
-    ColorRGB                RenderColor;
+    bool                        HaveOldTime;
+    UInt32                      OldTime;
+    UInt32                      ActiveTimerMilliS;
 
-    Array<int>              Results;
+    ColorRGB                    RenderColor;
+
+    struct MeasurementResult : public ListNode<MeasurementResult>, public NewOverrideBase
+    {
+        MeasurementResult()
+         :  DeviceMeasuredElapsedMilliS(0),
+            TimedOutWaitingForTestStarted(false),
+            TimedOutWaitingForColorDetected(false),
+            StartTestTicksMicroS(0),
+            TestStartedTicksMicroS(0)
+        {}
+
+        ColorRGB                TargetColor;
+
+        UInt32                  DeviceMeasuredElapsedMilliS;
+
+        bool                    TimedOutWaitingForTestStarted;
+        bool                    TimedOutWaitingForColorDetected;
+
+        UInt64                  StartTestTicksMicroS;
+        UInt64                  TestStartedTicksMicroS;
+    };
+
+    List<MeasurementResult>     Results;
+
+    MeasurementResult*          getActiveResult();
+
+    StringBuffer			    ResultsString;
+	String					    ReturnedResultString;
 };
 
 } // namespace OVR

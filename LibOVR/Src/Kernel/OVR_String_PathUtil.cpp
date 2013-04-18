@@ -24,6 +24,7 @@ namespace OVR {
 // Scans file path finding filename start and extension start, fills in their addess.
 void ScanFilePath(const char* url, const char** pfilename, const char** pext)
 { 
+    const char* urlStart = url;
     const char *filename = 0;
     const char *lastDot = 0;
 
@@ -45,9 +46,18 @@ void ScanFilePath(const char* url, const char** pfilename, const char** pext)
     }
 
     if (pfilename)
-        *pfilename = filename;
+    {
+        // It was a naked filename
+        if (urlStart && (*urlStart != '.') && *urlStart)
+            *pfilename = urlStart;
+        else
+            *pfilename = filename;
+    }
+
     if (pext)
+    {
         *pext = lastDot;
+    }
 }
 
 // Scans till the end of protocol. Returns first character past protocol,
@@ -173,9 +183,11 @@ String  String::GetExtension() const
 void    String::StripExtension()
 {
     const char* ext = 0;
-    ScanFilePath(ToCStr(), 0, &ext);
+    ScanFilePath(ToCStr(), 0, &ext);    
     if (ext)
-        AssignString(ext, OVR_strlen(ext));
+    {
+        *this = String(ToCStr(), ext-ToCStr());
+    }
 }
 
 void    String::StripProtocol()

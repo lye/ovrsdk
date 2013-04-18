@@ -21,13 +21,15 @@ otherwise accompanies this software in either electronic or hard copy form.
 #include "Kernel/OVR_KeyCodes.h"
 
 namespace OVR { namespace Render {
-    class Renderer;
+    class RenderDevice;
     struct RendererParams;
 }}
 
 namespace OVR { namespace Platform {
 
-class PlatformBase;
+using Render::RenderDevice;
+
+class PlatformCore;
 class Application;
 
 
@@ -95,24 +97,54 @@ struct GamepadState
     }
 };
 
-//-------------------------------------------------------------------------------------
 
-// PlatformBase implements system window/viewport setup functionality and
+//-------------------------------------------------------------------------------------
+// ***** SetupGraphicsDeviceSet
+
+typedef RenderDevice* (*RenderDeviceCreateFunc)(const Render::RendererParams&, void*);
+
+// SetupGraphicsDeviceSet is a PlatformCore::SetupGraphics initialization helper class,
+// used to build up a list of RenderDevices that can be used for rendering.
+// Specifying a smaller set allows application to avoid linking unused graphics devices.
+struct SetupGraphicsDeviceSet
+{    
+    SetupGraphicsDeviceSet(const char* typeArg, RenderDeviceCreateFunc createFunc)
+        : pTypeArg(typeArg), pCreateDevice(createFunc), pNext(0) { }
+    SetupGraphicsDeviceSet(const char* typeArg, RenderDeviceCreateFunc createFunc,
+                           const SetupGraphicsDeviceSet& next)
+        : pTypeArg(typeArg), pCreateDevice(createFunc), pNext(&next) { }
+
+    // Selects graphics object based on type string; returns 'this' if not found.
+    const SetupGraphicsDeviceSet* PickSetupDevice(const char* typeArg) const;
+
+    const char*               pTypeArg;
+    RenderDeviceCreateFunc    pCreateDevice;        
+
+private:
+    const SetupGraphicsDeviceSet*  pNext;
+};
+
+//-------------------------------------------------------------------------------------
+// ***** PlatformCore
+
+// PlatformCore defines abstract system window/viewport setup functionality and
 // maintains a renderer. This class is separated from Application because it can have
 // derived platform-specific implementations.
+// Specific implementation classes are hidden within platform-specific versions
+// such as Win32::PlatformCore.
 
-class PlatformBase : public NewOverrideBase
+class PlatformCore : public NewOverrideBase
 {
 protected:
-    Application*          pApp;
-    Ptr<Render::Renderer> pRender;
-    // Subclass should initialize this by calling GetTicks() during SetupWindow.
-    UInt64                StartupTicks; 
+    Application*        pApp;
+    Ptr<RenderDevice>   pRender;    
+    UInt64              StartupTicks; 
 
 public:
-    inline PlatformBase(Application *app);
-    virtual ~PlatformBase() { }
+    inline PlatformCore(Application *app);
+    virtual ~PlatformCore() { }
     Application*      GetApp() { return pApp; }
+    RenderDevice*     GetRenderer() const { return pRender; }
 
     virtual bool      SetupWindow(int w, int h) = 0;
     // Destroys window and also releases renderer.
@@ -120,24 +152,33 @@ public:
     virtual void      Exit(int exitcode) = 0;
 
     virtual void      ShowWindow(bool visible) = 0;
-
-    virtual Render::Renderer* SetupGraphics(const char* gtype, const Render::RendererParams& rp) = 0;
-    Render::Renderer* SetupGraphics(const char* gtype = 0);
+    
+    virtual bool      SetFullscreen(const Render::RendererParams& rp, int fullscreen);
+   
+    // Search for a matching graphics renderer based on type argument and initializes it.    
+    virtual RenderDevice* SetupGraphics(const SetupGraphicsDeviceSet& setupGraphicsDesc,
+                                        const char* gtype,
+                                        const Render::RendererParams& rp) = 0;
 
     virtual void      SetMouseMode(MouseMode mm) { OVR_UNUSED(mm); }
 
     virtual void      GetWindowSize(int* w, int* h) const = 0;
 
     virtual void      SetWindowTitle(const char*title) = 0;
-    // Time
+	virtual void	  PlayMusicFile(const char *fileName) { OVR_UNUSED(fileName); }
+    virtual int       GetScreenCount() { return 0; }
+    virtual String    GetScreenName(int screen) { OVR_UNUSED(screen); return String(); }
     
+    // Time    
 
     // An arbitrary counter in us.
-    virtual UInt64  GetTicks() const = 0;
+    virtual UInt64  GetTicks() const;
     double          GetAppTime() const
     {
         return (GetTicks() - StartupTicks) * 0.000001;
     }
+    
+    virtual String    GetContentDirectory() const { return "."; }
 };
 
 //-------------------------------------------------------------------------------------
@@ -147,7 +188,7 @@ public:
 class Application : public NewOverrideBase
 {
 protected:
-    class PlatformBase* pPlatform;
+    class PlatformCore* pPlatform;
 
 public:
     virtual ~Application() { }
@@ -167,8 +208,8 @@ public:
     virtual void OnResize(int width, int height)
     { OVR_UNUSED2(width, height); }
 
-    void         SetPlatform(PlatformBase* p) { pPlatform = p; }
-    PlatformBase* GetPlatform() const         { return pPlatform; }
+    void         SetPlatformCore(PlatformCore* p) { pPlatform = p; }
+    PlatformCore* GetPlatformCore() const         { return pPlatform; }
 
 
     // Static functions defined by OVR_PLATFORM_APP and used to initialize and
@@ -177,10 +218,11 @@ public:
     static void         DestroyApplication(Application* app);
 };
 
-inline PlatformBase::PlatformBase(Application *app)
+inline PlatformCore::PlatformCore(Application *app)
 {
     pApp = app;
-    pApp->SetPlatform(this);    
+    pApp->SetPlatformCore(this);    
+    StartupTicks = GetTicks();
 }
 
 }}

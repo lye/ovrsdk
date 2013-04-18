@@ -16,7 +16,6 @@ otherwise accompanies this software in either electronic or hard copy form.
 #include "OVR_Win32_DeviceManager.h"
 
 // Sensor & HMD Factories
-#include "OVR_Win32_FSRKSensor.h"
 #include "OVR_Win32_Sensor.h"
 #include "OVR_Win32_LatencyTest.h"
 #include "OVR_Win32_HMDDevice.h"
@@ -335,10 +334,9 @@ DeviceManager* DeviceManager::Create()
     {
         if (manager->Initialize(0))
         {            
-            manager->AddFactory(&Win32::FSRKSensorDeviceFactory::Instance);
-            manager->AddFactory(&Win32::SensorDeviceFactory::Instance);
-            manager->AddFactory(&Win32::LatencyTestDeviceFactory::Instance);
             manager->AddFactory(&Win32::HMDDeviceFactory::Instance);
+            manager->AddFactory(&Win32::SensorDeviceFactory::Instance);
+            manager->AddFactory(&Win32::LatencyTestDeviceFactory::Instance);            
 
             manager->AddRef();
         }

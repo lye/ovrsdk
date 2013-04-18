@@ -449,6 +449,7 @@ public:
     // Append a string
     void        AppendString(const wchar_t* pstr, SPInt len = -1);
     void        AppendString(const char* putf8str, SPInt utf8StrSz = -1);
+    void        AppendFormat(const char* format, ...);
 
     // Assigned a string with dynamic data (copied through initializer).
     //void        AssignString(const InitStruct& src, UPInt size);

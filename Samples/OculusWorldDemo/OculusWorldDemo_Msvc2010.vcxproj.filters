@@ -15,34 +15,37 @@
     <ClCompile Include="..\CommonSrc\Platform\Platform.cpp">
       <Filter>CommonSrc\Platform</Filter>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Platform\Platform_Win32.cpp">
+    <ClCompile Include="..\CommonSrc\Platform\Win32_Platform.cpp">
       <Filter>CommonSrc\Platform</Filter>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer.cpp">
+    <ClCompile Include="..\CommonSrc\Render\Render_Device.cpp">
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D1x.cpp">
+    <ClCompile Include="..\CommonSrc\Render\Render_D3D1X_Device.cpp">
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D10.cpp">
-      <Filter>CommonSrc\Render</Filter>
-    </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_GL.cpp">
+    <ClCompile Include="..\CommonSrc\Render\Render_D3D10_Device.cpp">
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
     <ClCompile Include="OculusWorldDemo.cpp" />
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_D3D11.cpp">
+    <ClCompile Include="..\CommonSrc\Render\Render_D3D11_Device.cpp">
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\Renderer_Stereo.cpp">
+    <ClCompile Include="..\CommonSrc\Render\Render_Stereo.cpp">
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Renderer\ImageReader_TGA.cpp">
+    <ClCompile Include="..\CommonSrc\Render\Render_LoadTextureTGA.cpp">
+      <Filter>CommonSrc\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="XmlHandler.cpp" />
+    <ClCompile Include="Player.cpp" />
+    <ClCompile Include="..\..\3rdParty\TinyXml\tinyxml2.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_LoadTextureDDS.cpp">
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\CommonSrc\Platform\Platform_Win32.h">
+    <ClInclude Include="..\CommonSrc\Platform\Win32_Platform.h">
       <Filter>CommonSrc\Platform</Filter>
     </ClInclude>
     <ClInclude Include="..\CommonSrc\Platform\Platform.h">
@@ -51,26 +54,26 @@
     <ClInclude Include="..\CommonSrc\Platform\Platform_Default.h">
       <Filter>CommonSrc\Platform</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Font.h">
+    <ClInclude Include="..\CommonSrc\Render\Render_Font.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer.h">
+    <ClInclude Include="..\CommonSrc\Render\Render_Device.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D1x.h">
+    <ClInclude Include="..\CommonSrc\Render\Render_D3D1X_Device.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D10.h">
+    <ClInclude Include="..\CommonSrc\Render\Render_D3D10_Device.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_D3D11.h">
+    <ClInclude Include="..\CommonSrc\Render\Render_D3D11_Device.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_GL.h">
+    <ClInclude Include="..\CommonSrc\Render\Render_Stereo.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
-    <ClInclude Include="..\CommonSrc\Renderer\Renderer_Stereo.h">
-      <Filter>CommonSrc\Render</Filter>
-    </ClInclude>
+    <ClInclude Include="XmlHandler.h" />
+    <ClInclude Include="Player.h" />
+    <ClInclude Include="..\..\3rdParty\TinyXml\tinyxml2.h" />
   </ItemGroup>
 </Project>

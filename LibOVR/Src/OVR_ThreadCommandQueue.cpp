@@ -146,7 +146,7 @@ void ThreadCommand::PopBuffer::InitFromBuffer(void* data)
     if (Size)
         Destruct<ThreadCommand>(toCommand());    
     Size = cmd->Size;    
-    memcpy(Buffer, cmd, Size);
+    memcpy(Buffer, (void*)cmd, Size);
 }
 
 void ThreadCommand::PopBuffer::Execute()

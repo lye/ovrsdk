@@ -18,9 +18,11 @@ otherwise accompanies this software in either electronic or hard copy form.
 #define OVR_Math_h
 
 #include <assert.h>
+#include <stdlib.h>
 #include <math.h>
 
 #include "OVR_Types.h"
+#include "OVR_RefCount.h"
 
 namespace OVR {
 
@@ -135,6 +137,83 @@ FT DegreeToRad(FT rads) { return rads * Math<FT>::DegreeToRadFactor; }
 
 template<class T>
 class Quat;
+
+//-------------------------------------------------------------------------------------
+// ***** Vector2f - 2D Vector2f
+
+// Vector2f represents a 2-dimensional vector or point in space,
+// consisting of coordinates x and y,
+
+template<class T>
+class Vector2
+{
+public:
+    T x, y;
+
+    Vector2() : x(0), y(0) { }
+    Vector2(T x_, T y_) : x(x_), y(y_) { }
+    explicit Vector2(T s) : x(s), y(s) { }
+
+    bool     operator== (const Vector2& b) const  { return x == b.x && y == b.y; }
+    bool     operator!= (const Vector2& b) const  { return x != b.x || y != b.y; }
+             
+    Vector2  operator+  (const Vector2& b) const  { return Vector2(x + b.x, y + b.y); }
+    Vector2& operator+= (const Vector2& b)        { x += b.x; y += b.y; return *this; }
+    Vector2  operator-  (const Vector2& b) const  { return Vector2(x - b.x, y - b.y); }
+    Vector2& operator-= (const Vector2& b)        { x -= b.x; y -= b.y; return *this; }
+    Vector2  operator- () const                   { return Vector2(-x, -y); }
+
+    // Scalar multiplication/division scales vector.
+    Vector2  operator*  (T s) const               { return Vector2(x*s, y*s); }
+    Vector2& operator*= (T s)                     { x *= s; y *= s; return *this; }
+
+    Vector2  operator/  (T s) const               { T rcp = T(1)/s;
+                                                    return Vector2(x*rcp, y*rcp); }
+    Vector2& operator/= (T s)                     { T rcp = T(1)/s;
+                                                    x *= rcp; y *= rcp;
+                                                    return *this; }
+
+    // Compare two vectors for equality with tolerance. Returns true if vectors match withing tolerance.
+    bool      Compare(const Vector2&b, T tolerance = Mathf::Tolerance)
+    {
+        return (fabs(b.x-x) < tolerance) && (fabs(b.y-y) < tolerance);
+    }
+    
+    // Dot product overload.
+    // Used to calculate angle q between two vectors among other things,
+    // as (A dot B) = |a||b|cos(q).
+    T     operator*  (const Vector2& b) const    { return x*b.x + y*b.y; }
+
+    // Returns the angle from this vector to b, in radians.
+    T       Angle(const Vector2& b) const        { return acos((*this * b)/(Length()*b.Length())); }
+
+    // Return Length of the vector squared.
+    T       LengthSq() const                     { return (x * x + y * y); }
+    // Return vector length.
+    T       Length() const                       { return sqrt(LengthSq()); }
+
+    // Returns distance between two points represented by vectors.
+    T       Distance(Vector2& b) const           { return (*this - b).Length(); }
+    
+    // Determine if this a unit vector.
+    bool    IsNormalized() const                 { return fabs(LengthSq() - T(1)) < Math<T>::Tolerance; }
+    // Normalize, convention vector length to 1.    
+    void    Normalize()                          { *this /= Length(); }
+    // Returns normalized (unit) version of the vector without modifying itself.
+    Vector2 Normalized() const                   { return *this / Length(); }
+
+    // Linearly interpolates from this vector to another.
+    // Factor should be between 0.0 and 1.0, with 0 giving full value to this.
+    Vector2 Lerp(const Vector2& b, T f) const    { return *this*(T(1) - f) + b*f; }
+
+    // Projects this vector onto the argument; in other words,
+    // A.Project(B) returns projection of vector A onto B.
+    Vector2 ProjectTo(const Vector2& b) const    { return b * ((*this * b) / b.LengthSq()); }
+};
+
+
+typedef Vector2<float>  Vector2f;
+typedef Vector2<double> Vector2d;
 
 //-------------------------------------------------------------------------------------
 // ***** Vector3f - 3D Vector3f
@@ -523,6 +602,7 @@ public:
         t.M[2][3] = z;
         return t;
     }
+
     static Matrix4f Scaling(const Vector3f& v)
     {
         Matrix4f t;
@@ -670,6 +750,7 @@ public:
 // 
 // Quaternion multiplications are done in right-to-left order, to match the
 // behavior of matrices.
+
 
 template<class T>
 class Quat
@@ -834,7 +915,7 @@ public:
         return ((*this * Quat<T>(v.x, v.y, v.z, 0)) * Inverted()).Imag();
     }
 
-       
+    
     // Inversed quaternion rotates in the opposite direction.
     Quat        Inverted() const
     {
@@ -860,7 +941,7 @@ public:
                         float(T(2) * (x*z - w*y)), float(T(2) * (y*z + w*x)), float(ww - xx - yy + zz) );
     }
 
-
+    
     // GetEulerAngles extracts Euler angles from the quaternion, in the specified order of
     // axis rotations and the specified coordinate system. Right-handed coordinate system
     // is the default, with CCW rotations while looking in the negative axis direction.
@@ -921,7 +1002,7 @@ public:
     void GetEulerAngles(T *a, T *b, T *c)
     { GetEulerAngles<A1, A2, A3, Rotate_CCW, Handed_R>(a, b, c); }
 
-    
+
     // GetEulerAnglesABA extracts Euler angles from the quaternion, in the specified order of
     // axis rotations and the specified coordinate system. Right-handed coordinate system
     // is the default, with CCW rotations while looking in the negative axis direction.
@@ -981,6 +1062,52 @@ public:
 
 typedef Quat<float>  Quatf;
 typedef Quat<double> Quatd;
+
+//-------------------------------------------------------------------------------------
+// ***** Plane
+
+// Consists of a normal vector and distance from the origin where the plane is located.
+
+template<class T>
+class Plane : public RefCountBase<Plane<T> >
+{
+public:
+    Vector3<T> N;
+    T          D;
+
+    Plane() : D(0) {}
+
+    // Normals must already be normalized
+    Plane(const Vector3<T>& n, T d) : N(n), D(d) {}
+    Plane(T x, T y, T z, T d) : N(x,y,z), D(d) {}
+
+    // construct from a point on the plane and the normal
+    Plane(const Vector3<T>& p, const Vector3<T>& n) : N(n), D(-(p * n)) {}
+
+    // Find the point to plane distance. The sign indicates what side of the plane the point is on (0 = point on plane).
+    T TestSide(const Vector3<T>& p) const
+    {
+        return (N * p) + D;
+    }
+
+    Plane<T> Flipped() const
+    {
+        return Plane(-N, -D);
+    }
+
+    void Flip()
+    {
+        N = -N;
+        D = -D;
+    }
+
+	bool operator==(const Plane<T>& rhs) const
+	{
+		return (this->D == rhs.D && this->N == rhs.N);
+	}
+};
+
+typedef Plane<float> Planef;
 
 }
 
