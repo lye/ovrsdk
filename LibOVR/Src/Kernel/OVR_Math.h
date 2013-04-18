@@ -790,62 +790,6 @@ public:
     }
 
 
-    // AnnaSteve TODO: check this and everywhere it is used. 
-    // I think the direction is wrong here!!!
-    // WHERE is it used?
-    
-    // Constructs a quaternion that would perform rotation
-    // from Vector3f A to Vector3f B.
-   /* Quat(Vector3<T> a, Vector3<T> b)
-    {
-        a.Normalize();
-        b.Normalize();
-        Vector3<T> up = b.Cross(a);
-        T          uplen = up.Length();
-
-        if (uplen < Math<T>::Tolerance)
-        {
-            if ((a * b) > -Math<T>::Tolerance)
-            {
-                x = y = z = 0; w = 1;
-                return;
-            }
-
-            //??? - test
-            if (a.x > a.y)
-                up = a.Cross(Vector3<T>(0,1,0));
-            else
-                up = a.Cross(Vector3<T>(1,0,0));
-            w = 0; // cos(180deg/2)
-            x = up.x; // * sin(180deg/2)
-            y = up.y;
-            z = up.z;
-            return;
-        }
-
-        T dot = a * b;
-        T angle;
-        if (dot < 0)
-        {
-            angle = Math<T>::Pi + asin(uplen);
-            up = -up;
-        }
-        else
-        {
-            angle = acos(dot);
-        }
-        T sa = sin(angle * T(0.5)) / uplen;
-        x = up.x * sa;
-        y = up.y * sa;
-        z = up.z * sa;
-        w = cos(angle * T(0.5));
-
-        Vector3<T> b2 = this->Rotate(a);
-        Vector3<T> b2c = this->Conj().Rotate(a);
-        //OVR_ASSERT((b2 - b).LengthSq() < Math<T>::Tolerance);
-    }*/
-
-
     void GetAxisAngle(Vector3<T>* axis, T* angle) const
     {
         if (LengthSq() > Math<T>::Tolerance * Math<T>::Tolerance)

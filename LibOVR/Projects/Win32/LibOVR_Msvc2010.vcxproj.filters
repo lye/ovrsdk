@@ -59,9 +59,14 @@
     <ClCompile Include="..\..\Src\OVR_DeviceHandle.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_DeviceStatus.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_LatencyTest.cpp" />
-    <ClCompile Include="..\..\Src\OVR_LatencyTestUtil.cpp" />
     <ClCompile Include="..\..\Src\Kernel\OVR_String_FormatUtil.cpp">
       <Filter>Kernel</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Src\Util\Util_Render_Stereo.cpp">
+      <Filter>Util</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Src\Util\Util_LatencyTest.cpp">
+      <Filter>Util</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -147,7 +152,12 @@
     <ClInclude Include="..\..\Src\Kernel\OVR_Color.h">
       <Filter>Kernel</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Src\OVR_LatencyTestUtil.h" />
+    <ClInclude Include="..\..\Src\Util\Util_Render_Stereo.h">
+      <Filter>Util</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Util\Util_LatencyTest.h">
+      <Filter>Util</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Kernel">
@@ -155,6 +165,9 @@
     </Filter>
     <Filter Include="Include">
       <UniqueIdentifier>{53c19267-8aec-48ad-a1a3-7ffd9090f075}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Util">
+      <UniqueIdentifier>{6d4ac63a-dea8-4fdb-ad20-6768c33376d9}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>

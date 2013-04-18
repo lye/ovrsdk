@@ -47,7 +47,6 @@
     <ClInclude Include="..\..\Src\OVR_DeviceHandle.h" />
     <ClInclude Include="..\..\Src\OVR_DeviceImpl.h" />
     <ClInclude Include="..\..\Src\OVR_DeviceMessages.h" />
-    <ClInclude Include="..\..\Src\OVR_LatencyTestUtil.h" />
     <ClInclude Include="..\..\Src\OVR_SensorFusion.h" />
     <ClInclude Include="..\..\Src\OVR_ThreadCommandQueue.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_DeviceManager.h" />
@@ -56,6 +55,8 @@
     <ClInclude Include="..\..\Src\OVR_Win32_HMDDevice.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_LatencyTest.h" />
     <ClInclude Include="..\..\Src\OVR_Win32_Sensor.h" />
+    <ClInclude Include="..\..\Src\Util\Util_LatencyTest.h" />
+    <ClInclude Include="..\..\Src\Util\Util_Render_Stereo.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Src\Kernel\OVR_Alg.cpp" />
@@ -77,7 +78,6 @@
     <ClCompile Include="..\..\Src\Kernel\OVR_UTF8Util.cpp" />
     <ClCompile Include="..\..\Src\OVR_DeviceHandle.cpp" />
     <ClCompile Include="..\..\Src\OVR_DeviceImpl.cpp" />
-    <ClCompile Include="..\..\Src\OVR_LatencyTestUtil.cpp" />
     <ClCompile Include="..\..\Src\OVR_SensorFusion.cpp" />
     <ClCompile Include="..\..\Src\OVR_ThreadCommandQueue.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_DeviceManager.cpp" />
@@ -86,6 +86,8 @@
     <ClCompile Include="..\..\Src\OVR_Win32_HMDDevice.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_LatencyTest.cpp" />
     <ClCompile Include="..\..\Src\OVR_Win32_Sensor.cpp" />
+    <ClCompile Include="..\..\Src\Util\Util_LatencyTest.cpp" />
+    <ClCompile Include="..\..\Src\Util\Util_Render_Stereo.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{934B40C7-F40A-4E4C-97A7-B9659BE0A441}</ProjectGuid>

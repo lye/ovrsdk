@@ -31,9 +31,6 @@
       <Filter>CommonSrc\Render</Filter>
     </ClCompile>
     <ClCompile Include="SensorBoxTest.cpp" />
-    <ClCompile Include="..\CommonSrc\Render\Render_Stereo.cpp">
-      <Filter>CommonSrc\Render</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\CommonSrc\Platform\Win32_Platform.h">
@@ -58,9 +55,6 @@
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
     <ClInclude Include="..\CommonSrc\Render\Render_D3D11_Device.h">
-      <Filter>CommonSrc\Render</Filter>
-    </ClInclude>
-    <ClInclude Include="..\CommonSrc\Render\Render_Stereo.h">
       <Filter>CommonSrc\Render</Filter>
     </ClInclude>
   </ItemGroup>

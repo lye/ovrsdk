@@ -16,11 +16,10 @@ otherwise accompanies this software in either electronic or hard copy form.
 
 #include "OVR.h"
 
-#include "XmlHandler.h"
 #include "Player.h"
 #include "../CommonSrc/Platform/Platform_Default.h"
 #include "../CommonSrc/Render/Render_Device.h"
-#include "../CommonSrc/Render/Render_Stereo.h"
+#include "../CommonSrc/Render/Render_XMLSceneLoader.h"
 #include "../CommonSrc/Render/Render_FontEmbed_DejaVu48.h"
 
 #include <Kernel/OVR_SysFile.h>
@@ -89,7 +88,7 @@ public:
 
     virtual void OnMessage(const Message& msg);
 
-    void         Render(const StereoRenderParams& stereo);
+    void         Render(const StereoEyeParams& stereo);
 
     // Sets temporarily displayed message for adjustments
     void         SetAdjustMessage(const char* format, ...);
@@ -133,7 +132,7 @@ protected:
     HMDInfo             HMDInfo;
 
     Ptr<LatencyTestDevice>  pLatencyTester;
-    LatencyTestUtil         LatencyUtil;
+    Util::LatencyTest   LatencyUtil;
 
     double              LastUpdate;
     int                 FPS;
@@ -1036,7 +1035,7 @@ static void DrawTextBox(RenderDevice* prender, float x, float y,
     prender->RenderText(&DejaVu, text, x, y, textSize, Color(255,255,0,210));
 }
 
-void OculusWorldDemoApp::Render(const StereoRenderParams& stereo)
+void OculusWorldDemoApp::Render(const StereoEyeParams& stereo)
 {
     pRender->BeginScene(PostProcess);
 
@@ -1127,11 +1126,10 @@ void OculusWorldDemoApp::Render(const StereoRenderParams& stereo)
 
 
     // Display colored quad if we're doing a latency test.
-    ColorRGB colorToDisplay;
+    Color colorToDisplay;
     if (LatencyUtil.DisplayScreenColor(colorToDisplay))
     {
-        Color rectCol(colorToDisplay.R, colorToDisplay.G, colorToDisplay.B);
-        pRender->FillRect(-0.4f, -0.4f, 0.4f, 0.4f, rectCol);
+        pRender->FillRect(-0.4f, -0.4f, 0.4f, 0.4f, colorToDisplay);
     }
 
     pRender->FinishScene();

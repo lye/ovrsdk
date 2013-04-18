@@ -508,13 +508,13 @@ public:
 // LatencyTestConfiguration specifies configuration information for the Oculus Latency Tester device.
 struct LatencyTestConfiguration
 {
-    LatencyTestConfiguration(const ColorRGB& threshold, bool sendSamples = false)
+    LatencyTestConfiguration(const Color& threshold, bool sendSamples = false)
         : Threshold(threshold), SendSamples(sendSamples) 
     {
     }
 
     // The color threshold for triggering a detected display change.
-    ColorRGB    Threshold;
+    Color    Threshold;
     // Flag specifying whether we wish to receive a stream of color values from the sensor.
     bool        SendSamples;
 };
@@ -524,13 +524,13 @@ struct LatencyTestConfiguration
 // LatencyTestCalibrate specifies colors used for Latency Tester calibration.
 struct LatencyTestCalibrate
 {
-    LatencyTestCalibrate(const ColorRGB& value)
+    LatencyTestCalibrate(const Color& value)
         : Value(value)
     {
     }
 
     // The color being calibrated to.
-    ColorRGB   Value;
+    Color   Value;
 };
 
 //-------------------------------------------------------------------------------------
@@ -538,13 +538,13 @@ struct LatencyTestCalibrate
 // LatencyTestStartTest specifies values used when starting the Latency Tester test.
 struct LatencyTestStartTest
 {
-    LatencyTestStartTest(const ColorRGB& targetValue)
+    LatencyTestStartTest(const Color& targetValue)
         : TargetValue(targetValue)
     {
     }
 
     // The color value that the display is being set to.
-    ColorRGB    TargetValue;
+    Color    TargetValue;
 };
 
 //-------------------------------------------------------------------------------------

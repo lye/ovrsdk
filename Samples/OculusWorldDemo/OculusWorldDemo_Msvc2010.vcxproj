@@ -181,10 +181,9 @@
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
-    <ClCompile Include="..\CommonSrc\Render\Render_Stereo.cpp" />
     <ClCompile Include="..\..\3rdParty\TinyXml\tinyxml2.cpp" />
+    <ClCompile Include="..\CommonSrc\Render\Render_XmlSceneLoader.cpp" />
     <ClCompile Include="OculusWorldDemo.cpp" />
-    <ClCompile Include="XmlHandler.cpp" />
     <ClCompile Include="Player.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -196,9 +195,8 @@
     <ClInclude Include="..\CommonSrc\Render\Render_D3D10_Device.h" />
     <ClInclude Include="..\CommonSrc\Render\Render_D3D11_Device.h" />
     <ClInclude Include="..\CommonSrc\Render\Render_D3D1X_Device.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_Stereo.h" />
     <ClInclude Include="..\..\3rdParty\TinyXml\tinyxml2.h" />
-    <ClInclude Include="XmlHandler.h" />
+    <ClInclude Include="..\CommonSrc\Render\Render_XmlSceneLoader.h" />
     <ClInclude Include="Player.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

@@ -893,7 +893,7 @@ void LatencyTestDevice::onLatencyTestSamplesMessage(LatencyTestSamplesMessage* m
         MessageLatencyTestSamples samples(this);
         for (UByte i = 0; i < s.SampleCount; i++)
         {            
-            samples.Samples.PushBack(ColorRGB(s.Samples[i].Value[0], s.Samples[i].Value[1], s.Samples[i].Value[2]));
+            samples.Samples.PushBack(Color(s.Samples[i].Value[0], s.Samples[i].Value[1], s.Samples[i].Value[2]));
         }
 
         HandlerRef.GetHandler()->OnMessage(samples);
@@ -914,8 +914,8 @@ void LatencyTestDevice::onLatencyTestColorDetectedMessage(LatencyTestColorDetect
     {
         MessageLatencyTestColorDetected detected(this);
         detected.Elapsed = s.Elapsed;
-        detected.DetectedValue = ColorRGB(s.TriggerValue[0], s.TriggerValue[1], s.TriggerValue[2]);
-        detected.TargetValue = ColorRGB(s.TargetValue[0], s.TargetValue[1], s.TargetValue[2]);
+        detected.DetectedValue = Color(s.TriggerValue[0], s.TriggerValue[1], s.TriggerValue[2]);
+        detected.TargetValue = Color(s.TargetValue[0], s.TargetValue[1], s.TargetValue[2]);
 
         HandlerRef.GetHandler()->OnMessage(detected);
     }
@@ -934,7 +934,7 @@ void LatencyTestDevice::onLatencyTestStartedMessage(LatencyTestStartedMessage* m
     if (HandlerRef.GetHandler())
     {
         MessageLatencyTestStarted started(this);
-        started.TargetValue = ColorRGB(ts.TargetValue[0], ts.TargetValue[1], ts.TargetValue[2]);
+        started.TargetValue = Color(ts.TargetValue[0], ts.TargetValue[1], ts.TargetValue[2]);
 
         HandlerRef.GetHandler()->OnMessage(started);
     }

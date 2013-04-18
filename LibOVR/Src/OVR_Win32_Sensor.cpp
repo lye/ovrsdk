@@ -113,10 +113,8 @@ struct TrackerSensors
         LastCommandID	= DecodeUInt16(buffer + 4);
         Temperature		= DecodeSInt16(buffer + 6);
         
-        if (SampleCount > 2)
-        {
-            OVR_DEBUG_LOG_TEXT(("TackerSensor::Decode SampleCount=%d\n", SampleCount));
-        }
+        //if (SampleCount > 2)        
+        //    OVR_DEBUG_LOG_TEXT(("TackerSensor::Decode SampleCount=%d\n", SampleCount));        
 
         // Only unpack as many samples as there actually are
         UByte iterationCount = (SampleCount > 2) ? 3 : SampleCount;
@@ -470,10 +468,12 @@ void SensorDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
                 HMDDeviceCreateDesc hmdCreateDesc(&HMDDeviceFactory::Instance, String(), String());
                 hmdCreateDesc.SetScreenParameters(0, 0,
                                                   displayInfo.HResolution, displayInfo.VResolution,
-                                                  displayInfo.HScreenSize, displayInfo.HScreenSize);
+                                                  displayInfo.HScreenSize, displayInfo.VScreenSize);
 
-                if ((displayInfo.DistortionType & SensorDisplayInfo::Mask_BaseFmt) == 2)
+                if ((displayInfo.DistortionType & SensorDisplayInfo::Mask_BaseFmt) == SensorDisplayInfo::Base_Distortion)
                     hmdCreateDesc.SetDistortion(displayInfo.DistortionK);
+                if (displayInfo.HScreenSize > 0.14f)
+                    hmdCreateDesc.Set7Inch();
 
                 ExternalVisitor.Visit(hmdCreateDesc);
             }                       
@@ -526,7 +526,7 @@ bool SensorDeviceCreateDesc::GetDeviceInfo(DeviceInfo* info) const
 SensorDevice::SensorDevice(SensorDeviceCreateDesc* createDesc)
     : OVR::DeviceImpl<OVR::SensorDevice>(createDesc, 0),
       Coordinates(SensorDevice::Coord_Sensor),
-      HWCoordinates(SensorDevice::Coord_HMD), // HW reports HMD cooridinates by default.
+      HWCoordinates(SensorDevice::Coord_HMD), // HW reports HMD coorinates by default.
       NextKeepAliveTicks(0),
       MaxValidRange(SensorScaleRange::GetMaxSensorRange()),
       hDev(NULL), ReadRequested(false)
@@ -633,6 +633,15 @@ bool SensorDevice::openDevice(const char ** errorFormatString)
     {
         ssr.Unpack();
         ssr.GetSensorRange(&CurrentRange);
+    }
+
+    // If the sensor has "DisplayInfo" data, use HMD coordinate frame by default.
+    SensorDisplayInfo displayInfo;
+    if (hid.HidD_GetFeature(hDev, displayInfo.Buffer, SensorDisplayInfo::PacketSize))
+    {
+        displayInfo.Unpack();
+        Coordinates = (displayInfo.DistortionType & SensorDisplayInfo::Mask_BaseFmt) ?
+                      Coord_HMD : Coord_Sensor;
     }
 
     // Read/Apply sensor config.

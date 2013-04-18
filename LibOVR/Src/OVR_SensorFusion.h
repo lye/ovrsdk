@@ -129,10 +129,13 @@ public:
     void        SetDelegateMessageHandler(MessageHandler* handler)
     { pDelegate = handler; }
 
-	// Prediction functions
-    float       GetPredictionDelta() const { return PredictionDT; }
+	// Prediction functions.
+    // Prediction delta specifes how much prediction should be applied in seconds; it should in
+    // general be under the average rendering latency. Call GetPredictedOrientation() to get
+    // predicted orientation.
+    float       GetPredictionDelta() const                  { return PredictionDT; }
     void        SetPrediction(float dt, bool enable = true) { PredictionDT = dt; EnablePrediction = enable; }
-	void		SetPredictionFilter(bool enable = true) {FilterPrediction = enable;}
+	void		SetPredictionFilter(bool enable = true)     {FilterPrediction = enable;}
 
 private:
     SensorFusion* getThis()  { return this; }

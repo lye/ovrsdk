@@ -1667,7 +1667,15 @@ void RenderDevice::ForceFlushGPU()
     }
 }
 
-void RenderDevice::RenderText( const struct Font* font, const char* str, float x, float y, float size, Color c )
+
+void RenderDevice::FillRect(float left, float top, float right, float bottom, Color c)
+{
+    Context->OMSetBlendState(BlendState, NULL, 0xffffffff);
+    OVR::Render::RenderDevice::FillRect(left, top, right, bottom, c);
+    Context->OMSetBlendState(NULL, NULL, 0xffffffff);
+}
+
+void RenderDevice::RenderText(const struct Font* font, const char* str, float x, float y, float size, Color c)
 {
 	Context->OMSetBlendState(BlendState, NULL, 0xffffffff);
 	OVR::Render::RenderDevice::RenderText(font, str, x, y, size, c);

@@ -168,31 +168,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\CommonSrc\Platform\Platform.cpp" />
-    <ClCompile Include="..\CommonSrc\Platform\Win32_Platform.cpp" />
-    <ClCompile Include="..\CommonSrc\Render\Render_LoadTextureTGA.cpp" />
-    <ClCompile Include="..\CommonSrc\Render\Render_Device.cpp" />
-    <ClCompile Include="..\CommonSrc\Render\Render_D3D10_Device.cpp" />
-    <ClCompile Include="..\CommonSrc\Render\Render_D3D11_Device.cpp" />
-    <ClCompile Include="..\CommonSrc\Render\Render_D3D1X_Device.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="..\CommonSrc\Render\Render_Stereo.cpp" />
-    <ClCompile Include="OculusRoomTiny.cpp" />
+    <ClCompile Include="OculusRoomModel.cpp" />
+    <ClCompile Include="RenderTiny_D3D1X_Device.cpp" />
+    <ClCompile Include="RenderTiny_Device.cpp" />
+    <ClCompile Include="Win32_OculusRoomTiny.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\CommonSrc\Platform\Platform.h" />
-    <ClInclude Include="..\CommonSrc\Platform\Platform_Default.h" />
-    <ClInclude Include="..\CommonSrc\Platform\Win32_Platform.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_Font.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_Device.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_D3D10_Device.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_D3D11_Device.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_D3D1X_Device.h" />
-    <ClInclude Include="..\CommonSrc\Render\Render_Stereo.h" />
+    <ClInclude Include="RenderTiny_D3D1X_Device.h" />
+    <ClInclude Include="RenderTiny_Device.h" />
+    <ClInclude Include="Win32_OculusRoomTiny.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

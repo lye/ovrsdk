@@ -74,9 +74,7 @@ public:
     int       GetScreenCount();
     String    GetScreenName(int screen);
 
-    UInt64    GetTicks() const { return GetTickCount() * 1000; }
-
-    int  Run();
+    int        Run();
 };
 
 

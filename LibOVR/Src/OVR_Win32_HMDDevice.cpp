@@ -77,20 +77,26 @@ HMDDeviceCreateDesc::MatchResult HMDDeviceCreateDesc::MatchDevice(const DeviceCr
         (HScreenSize == s2.HScreenSize) &&
         (VScreenSize == s2.VScreenSize))
     {
+        if (DeviceId.IsEmpty() && !s2.DeviceId.IsEmpty())
+        {
+            *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);
+            return Match_Candidate;
+        }
+
         *pcandidate = 0;
         return Match_Found;
-    }    
+    }
     
-    // SensorDisplayInfo may override resolution settings, so store as candidiate.
+    // SensorDisplayInfo may override resolution settings, so store as candidate.
     if (s2.DeviceId.IsEmpty())
     {        
-        *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);        
+        *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);
         return Match_Candidate;
     }
     // OTHER HMD Monitor desc may initialize DeviceName/Id
     else if (DeviceId.IsEmpty())
     {
-        *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);        
+        *pcandidate = const_cast<DeviceCreateDesc*>((const DeviceCreateDesc*)this);
         return Match_Candidate;
     }
     
@@ -255,7 +261,7 @@ void HMDDeviceFactory::EnumerateDevices(EnumerateVisitor& visitor)
 
                 HMDDeviceCreateDesc hmdCreateDesc(this, deviceId, displayDeviceName);
 
-                if (hmdCreateDesc.IsSLA1())
+                if (hmdCreateDesc.Is7Inch())
                 {
                     // Physical dimension of SLA screen.
                     hmdCreateDesc.SetScreenParameters(mx, my, mwidth, mheight, 0.14976f, 0.0936f);
@@ -286,9 +292,9 @@ DeviceBase* HMDDeviceCreateDesc::NewDeviceInstance()
     return new HMDDevice(this);
 }
 
-bool HMDDeviceCreateDesc::IsSLA1() const
+bool HMDDeviceCreateDesc::Is7Inch() const
 {
-    return strstr(DeviceId.ToCStr(), "OVR0001") != 0;
+    return (strstr(DeviceId.ToCStr(), "OVR0001") != 0) || (Contents & Contents_7Inch);
 }
 
 bool HMDDeviceCreateDesc::GetDeviceInfo(DeviceInfo* info) const
@@ -297,10 +303,10 @@ bool HMDDeviceCreateDesc::GetDeviceInfo(DeviceInfo* info) const
         (info->InfoClassType != Device_None))
         return false;
 
-    bool isSLA = IsSLA1();
+    bool is7Inch = Is7Inch();
 
     OVR_strcpy(info->ProductName,  DeviceInfo::MaxNameLength,
-               isSLA ? "Oculus Rift DK1-SLA1" : "Oculus Rift DK1-Prototype");
+               is7Inch ? "Oculus Rift DK1" : "Oculus Rift DK1-Prototype");
     OVR_strcpy(info->Manufacturer, DeviceInfo::MaxNameLength, "Oculus VR");
     info->Type    = Device_HMD;
     info->Version = 0;
@@ -326,7 +332,7 @@ bool HMDDeviceCreateDesc::GetDeviceInfo(DeviceInfo* info) const
         }
         else
         {
-            if (IsSLA1())
+            if (is7Inch)
             {
                 // 7" screen.
                 hmdInfo->DistortionK[0]      = 1.0f;

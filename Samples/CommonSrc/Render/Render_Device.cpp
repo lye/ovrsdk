@@ -894,6 +894,7 @@ int GetTextureSize(int format, int w, int h)
         default:
             OVR_ASSERT(0);
     }
+    return 0;
 }
 
 }}

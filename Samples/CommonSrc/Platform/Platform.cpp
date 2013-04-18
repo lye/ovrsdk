@@ -6,6 +6,7 @@
 
 namespace OVR { namespace Platform {
 
+
 const SetupGraphicsDeviceSet* SetupGraphicsDeviceSet::PickSetupDevice(const char* typeArg) const
 {
     // Search for graphics creation object that matches type arg.
@@ -20,9 +21,18 @@ const SetupGraphicsDeviceSet* SetupGraphicsDeviceSet::PickSetupDevice(const char
     return this;
 }
 
-UInt64 PlatformCore::GetTicks() const
+//-------------------------------------------------------------------------------------
+
+PlatformCore::PlatformCore(Application *app)
 {
-    return OVR::Timer::GetRawTicks();
+    pApp = app;
+    pApp->SetPlatformCore(this);    
+    StartupTicks = OVR::Timer::GetTicks();
+}
+
+double PlatformCore::GetAppTime() const
+{
+    return (OVR::Timer::GetTicks() - StartupTicks) * (1.0 / (double)OVR::Timer::MksPerSecond);
 }
 
 bool PlatformCore::SetFullscreen(const Render::RendererParams&, int fullscreen)

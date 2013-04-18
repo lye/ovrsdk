@@ -51,6 +51,7 @@ protected:
     {
         Contents_Screen     = 1,
         Contents_Distortion = 2,
+        Contents_7Inch      = 4,
     };
     String      DeviceId;
     String      DisplayDeviceName;
@@ -96,7 +97,9 @@ public:
         Contents |= Contents_Distortion;
     }
 
-    bool IsSLA1() const;
+    void Set7Inch() { Contents |= Contents_7Inch; }
+
+    bool Is7Inch() const;
 };
 
 

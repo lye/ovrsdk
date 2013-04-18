@@ -141,7 +141,7 @@ protected:
     UInt64              StartupTicks; 
 
 public:
-    inline PlatformCore(Application *app);
+    PlatformCore(Application *app);
     virtual ~PlatformCore() { }
     Application*      GetApp() { return pApp; }
     RenderDevice*     GetRenderer() const { return pRender; }
@@ -169,14 +169,8 @@ public:
     virtual int       GetScreenCount() { return 0; }
     virtual String    GetScreenName(int screen) { OVR_UNUSED(screen); return String(); }
     
-    // Time    
-
-    // An arbitrary counter in us.
-    virtual UInt64  GetTicks() const;
-    double          GetAppTime() const
-    {
-        return (GetTicks() - StartupTicks) * 0.000001;
-    }
+    // Get time since start of application in seconds.
+    double            GetAppTime() const; 
     
     virtual String    GetContentDirectory() const { return "."; }
 };
@@ -218,12 +212,6 @@ public:
     static void         DestroyApplication(Application* app);
 };
 
-inline PlatformCore::PlatformCore(Application *app)
-{
-    pApp = app;
-    pApp->SetPlatformCore(this);    
-    StartupTicks = GetTicks();
-}
 
 }}
 

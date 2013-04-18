@@ -330,6 +330,9 @@ public:
         ExtraShaders = s;
     }
 
+
+    // Overrident to apply proper blend state.
+    virtual void FillRect(float left, float top, float right, float bottom, Color c);
 	virtual void RenderText(const struct Font* font, const char* str, float x, float y, float size, Color c);
 
     virtual void Render(const Matrix4f& matrix, Model* model);

@@ -19,6 +19,7 @@ LibOVR/Src/OVR_DeviceImpl.cpp
 LibOVR/Src/OVR_LatencyTestUtil.cpp
 LibOVR/Src/OVR_SensorFusion.cpp
 LibOVR/Src/OVR_ThreadCommandQueue.cpp
+LibOVR/Src/Util/Render_Stereo.cpp
 
 LibOVR/Src/Kernel/OVR_ThreadsPthread.cpp
 LibOVR/Src/OVR_Linux_DeviceManager.cpp

@@ -128,7 +128,7 @@ public:
     {
     }
 
-    Array<ColorRGB>     Samples;
+    Array<Color>     Samples;
 };
 
 // Sent when a Latency Tester 'color detected' event occurs.
@@ -141,8 +141,8 @@ public:
     }
 
     UInt16      Elapsed;
-    ColorRGB    DetectedValue;
-    ColorRGB    TargetValue;
+    Color       DetectedValue;
+    Color       TargetValue;
 };
 
 // Sent when a Latency Tester 'change color' event occurs.
@@ -154,7 +154,7 @@ public:
     {
     }
 
-    ColorRGB    TargetValue;
+    Color    TargetValue;
 };
 
 // Sent when a Latency Tester 'button' event occurs.
